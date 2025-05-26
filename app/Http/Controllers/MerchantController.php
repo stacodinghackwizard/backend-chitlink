@@ -51,48 +51,7 @@ class MerchantController extends Controller
         }
     }
 
-    // public function login(Request $request)
-    // {
-    //     $request->validate([
-    //         'email' => 'required|string|email',
-    //         'password' => 'required|string',
-    //     ]);
-
-    //     $merchant = Merchant::where('email', $request->email)->first();
-
-    //     if (!$merchant) {
-    //         return response()->json(['message' => 'Email not found'], 404);
-    //     }
-
-    //     if (!Hash::check($request->password, $merchant->password)) {
-    //         return response()->json(['message' => 'Invalid credentials'], 401);
-    //     }
-
-    //     // if (!$merchant->email_verified_at) {
-    //     //     return response()->json(['message' => 'Email not verified'], 403);
-    //     // }
-    //     // **Check if email is verified**
-    //     if ($request->email && is_null($merchant->email_verified_at)) {
-    //         return response()->json([
-    //             'status' => 'error',
-    //             'message' => 'Please verify your email before logging in.'
-    //         ], 403);
-    //     }
-
-    //     // Log the merchant in and create a token
-    //     $token = $merchant->createToken('API TOKEN')->plainTextToken;
-
-    //     // return response()->json(['merchant' => $merchant, 'token' => $token], 200);
-    //     return response()->json([
-    //         'status' => 'success',
-    //         'message' => 'Login successful',
-    //         'merchant' => $merchant,
-    //         'authorization' => [
-    //             'token' => $token,
-    //             'type' => 'bearer',
-    //         ]
-    //     ]);
-    // }
+   
 
     public function completeKyc(MerchantKycRequest $request)
     {
@@ -141,27 +100,91 @@ class MerchantController extends Controller
     // Update Merchant Profile
     public function updateProfile(Request $request)
     {
-        // Get the authenticated merchant
+       
         $merchant = Auth::guard('merchant')->user();
 
-        // Check if the merchant is authenticated
+       
         if (!$merchant) {
             return response()->json(['message' => 'User not authenticated.'], 401);
         }
 
-        // Validate the request
+       
         $request->validate([
             'business_name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email',
             'phone_number' => 'sometimes|string',
             'address' => 'sometimes|string',
             'reg_number' => 'sometimes|string',
+            'name' => 'sometimes|string'
             // Add other fields as necessary
         ]);
 
-        // Update only the fields provided
-        $merchant->update($request->only('business_name', 'email', 'phone_number', 'address', 'reg_number'));
+       
+        $merchant->update($request->only('name', 'business_name', 'email', 'phone_number', 'address', 'reg_number'));
 
         return response()->json(['message' => 'Profile updated successfully.', 'merchant' => $merchant], 200);
     }
+
+    public function updateProfileImage(Request $request)
+{
+    $merchant = Auth::guard('merchant')->user();
+
+    if (!$merchant) {
+        return response()->json(['message' => 'User not authenticated.'], 401);
+    }
+
+    // Debug: Log all request data
+    Log::info('Request data:', [
+        'all_data' => $request->all(),
+        'files' => $request->allFiles(),
+        'has_profile_image_file' => $request->hasFile('profile_image'),
+        'content_type' => $request->header('Content-Type'),
+        'method' => $request->method()
+    ]);
+
+    // Check if file exists before validation
+    if (!$request->hasFile('profile_image')) {
+        return response()->json([
+            'message' => 'No profile image file found in request.',
+            'debug_info' => [
+                'files_received' => $request->allFiles(),
+                'all_input' => $request->all()
+            ]
+        ], 422);
+    }
+
+    // Validate the request
+    $validator = Validator::make($request->all(), [
+        'profile_image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'message' => 'Validation failed',
+            'errors' => $validator->errors(),
+            'debug_info' => [
+                'files_received' => $request->allFiles(),
+                'has_file' => $request->hasFile('profile_image')
+            ]
+        ], 422);
+    }
+
+    try {
+        // Store the image
+        $path = $request->file('profile_image')->store('profile_images');
+
+        // Update the merchant's profile image path
+        $merchant->profile_image = $path;
+        $merchant->save();
+
+        return response()->json([
+            'message' => 'Profile image updated successfully.',
+            'merchant' => $merchant
+        ], 200);
+    } catch (\Exception $e) {
+        return response()->json([
+            'message' => 'Failed to update profile image: ' . $e->getMessage()
+        ], 500);
+    }
+}
 }

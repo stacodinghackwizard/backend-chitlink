@@ -37,20 +37,27 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/verify-password-reset', [VerificationController::class, 'verifyPasswordReset']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
+// KYC Route (requires authentication)
 Route::middleware(['auth:sanctum'])->group(function () {
+    Route::post('/kyc', [AuthController::class, 'completeKyc']);
+});
+
+// User and Merchant Routes (KYC check applied)
+Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->group(function () {
     // User Routes
     Route::prefix('users')->group(function () {
         Route::get('/profile', [UserController::class, 'profile']);
         Route::put('/profile', [UserController::class, 'updateProfile']);
+        Route::post('/profile/image', [UserController::class, 'updateProfileImage']);
     });
 
     // Merchant Routes
     Route::prefix('merchants')->group(function () {
         Route::get('/profile', [MerchantController::class, 'profile']);
         Route::put('/profile', [MerchantController::class, 'updateProfile']);
+        Route::post('/profile/image', [MerchantController::class, 'updateProfileImage']);
     });
 
-    Route::post('/kyc', [AuthController::class, 'completeKyc']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
     // Route::get('/merchants/profile', [MerchantController::class, 'profile']);

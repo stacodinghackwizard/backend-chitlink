@@ -15,7 +15,7 @@ class Merchant extends Authenticatable implements MustVerifyEmail
     use HasFactory, HasApiTokens, Notifiable;
 
     protected $fillable = [
-        
+        'name',
         'business_name',
         'email',
         'phone_number',
@@ -26,6 +26,7 @@ class Merchant extends Authenticatable implements MustVerifyEmail
         'nin',
         'bvn',
         'utility_bill_path',
+        'profile_image',
         'password_reset_code',
         'password_reset_expires_at',
         'password_reset_token',
