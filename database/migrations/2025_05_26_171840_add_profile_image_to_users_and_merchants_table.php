@@ -4,15 +4,19 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class AddEmailVerifiedAtToMerchantsTable extends Migration
+class AddProfileImageToUsersAndMerchantsTable extends Migration
 {
     /**
      * Run the migrations.
      */
     public function up(): void
     {
+        Schema::table('users', function (Blueprint $table) {
+            $table->string('profile_image')->nullable();
+        });
+
         Schema::table('merchants', function (Blueprint $table) {
-            $table->timestamp('email_verified_at')->nullable();
+            $table->string('profile_image')->nullable();
         });
     }
 
@@ -21,8 +25,12 @@ class AddEmailVerifiedAtToMerchantsTable extends Migration
      */
     public function down(): void
     {
+        Schema::table('users', function (Blueprint $table) {
+            $table->dropColumn('profile_image');
+        });
+
         Schema::table('merchants', function (Blueprint $table) {
-            $table->dropColumn('email_verified_at');
+            $table->dropColumn('profile_image');
         });
     }
 }

@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('merchants', function (Blueprint $table) {
             $table->id();
             $table->timestamps();
+            $table->string('name')->nullable();
             $table->string('business_name');
             $table->string('email')->unique();
             $table->string('phone_number')->nullable();

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Merchant;
+use Illuminate\Support\Facades\Log;
 
 class UserController extends Controller
 {
@@ -35,32 +36,12 @@ class UserController extends Controller
         return response()->json(['user' => $user], 201);
     }
 
-    // User Login
-    // public function login(Request $request)
-    // {
-    //     // Validate the request
-    //     $validator = Validator::make($request->all(), [
-    //         'email' => 'required|string|email',
-    //         'password' => 'required|string',
-    //     ]);
-
-    //     if ($validator->fails()) {
-    //         return response()->json($validator->errors(), 422);
-    //     }
-
-    //     // Attempt to log the user in
-    //     if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
-    //         $user = Auth::user();
-    //         return response()->json(['user' => $user], 200);
-    //     }
-
-    //     return response()->json(['message' => 'Invalid credentials'], 401);
-    // }
+   
 
     // Get User Profile
     public function profile()
     {
-        // Get the authenticated user
+    
         $user = Auth::user();
         $user = User::find($user->id);
 
@@ -72,52 +53,39 @@ class UserController extends Controller
             return response()->json(['message' => 'Merchants cannot access user details.'], 403);
         }
 
-        // Return user details
+      
         return response()->json([
             'message' => 'User profile retrieved successfully.',
             'user' => $user,
         ], 200);
 
-        // Check if the user is authenticated
-        // if (!$user) {
-        //     return response()->json(['message' => 'User not authenticated.'], 401);
-        // }
-
-        // // Ensure that only users can access this endpoint
-        // if ($user->user_type === 'merchant') {
-        //     return response()->json(['message' => 'Merchants cannot access user details.'], 403);
-        // }
-
-        // // Return user details
-        // return response()->json([
-        //     'message' => 'User profile retrieved successfully.',
-        //     'user' => $user,
-        // ], 200);
+       
     }
 
     // Update User Profile
     public function updateProfile(Request $request)
     {
-        // Get the authenticated user
+       
         $user = Auth::user();
         $user = User::find($user->id);
 
 
-        // Check if the user is authenticated
+       
         if (!$user) {
             return response()->json(['message' => 'User not authenticated.'], 401);
         }
 
-        // Validate the request
+       
         $request->validate([
             'email' => 'sometimes|email',
             'phone_number' => 'sometimes|string',
-            'password' => 'sometimes|string|min:8'
+            'password' => 'sometimes|string|min:8',
+            'name' => 'sometimes|string'
         ]);
 
         
         
-        $user->update($request->only('email', 'phone_number'));
+        $user->update($request->only('name', 'email', 'phone_number'));
 
         
         if ($request->filled('password')) {
@@ -126,5 +94,73 @@ class UserController extends Controller
         }
 
         return response()->json(['message' => 'Profile updated successfully.', 'user' => $user], 200);
+    }
+
+    public function updateProfileImage(Request $request)
+    {
+        Log::info('User profile image update request:', $request->all());
+        
+        $user = Auth::user();
+    
+        if (!$user) {
+            return response()->json(['message' => 'User not authenticated.'], 401);
+        }
+    
+        // Debug: Log all request data
+        Log::info('Request data:', [
+            'all_data' => $request->all(),
+            'files' => $request->allFiles(),
+            'has_profile_image_file' => $request->hasFile('profile_image'),
+            'content_type' => $request->header('Content-Type'),
+            'method' => $request->method()
+        ]);
+    
+      
+        if (!$request->hasFile('profile_image')) {
+            return response()->json([
+                'message' => 'No profile image file found in request.',
+                'debug_info' => [
+                    'files_received' => $request->allFiles(),
+                    'all_input' => $request->all()
+                ]
+            ], 422);
+        }
+    
+        // Validate the request
+        $validator = Validator::make($request->all(), [
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+                'debug_info' => [
+                    'files_received' => $request->allFiles(),
+                    'has_file' => $request->hasFile('profile_image')
+                ]
+            ], 422);
+        }
+    
+        try {
+            // Store the image
+            $path = $request->file('profile_image')->store('profile_images');
+    
+         
+            $user->profile_image = $path;
+            $user->save();
+    
+            Log::info('Profile image updated successfully for user: ' . $user->id);
+    
+            return response()->json([
+                'message' => 'Profile image updated successfully.',
+                'user' => $user
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Failed to update profile image: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update profile image: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

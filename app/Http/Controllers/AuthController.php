@@ -14,6 +14,7 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\VerificationMail;
 use Illuminate\Support\Str;
+use App\Mail\ForgotPasswordMail;
 
 class AuthController extends Controller
 {
@@ -47,11 +48,14 @@ class AuthController extends Controller
                     'reg_number' => $request->reg_number,
                     'password' => $password,
                     'cac_certificate' => $path,
+                    'name' => explode('@', $request->email)[0],
                 ];
 
+                Log::info('Creating merchant with data:', $creatableData);
                 $user = Merchant::create($creatableData);
             } else { // Default to 'user'
                 $creatableData = [
+                    'name' => explode('@', $request->email)[0],
                     'email' => $request->email,
                     'phone_number' => $request->phone_number,
                     'password' => $password,
@@ -171,6 +175,11 @@ class AuthController extends Controller
     {
         $user = Auth::user(); 
 
+        // Ensure the user is an instance of the correct model
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
+        }
+
         // Update KYC information for both users and merchants
         $user->update([
             'nin' => $request->nin,
@@ -214,8 +223,8 @@ class AuthController extends Controller
         $user->password_reset_expires_at = now()->addMinutes(10);
         $user->save();
 
-        // Send OTP via email or SMS
-        Mail::to($user->email)->send(new VerificationMail($user, $otp));
+        // Send OTP via email
+        Mail::to($user->email)->send(new ForgotPasswordMail($user, $otp));
 
         return response()->json(['status' => 'success', 'message' => 'Verification code sent.']);
     }
@@ -287,18 +296,6 @@ class AuthController extends Controller
 
 
        
-        // $guard = $userType === 'merchant' ? 'merchant' : 'web';
-
-       
-        // if (!Auth::guard($guard)->attempt($credentials)) {
-        //     return response()->json(['message' => 'Current password is incorrect.'], 403);
-        // }
-
-      
-        // $user = Auth::guard($guard)->user();
-
-       
-        // $user->password = Hash::make($request->new_password);
         
         $user->save();
 
