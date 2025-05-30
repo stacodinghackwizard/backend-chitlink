@@ -5,6 +5,7 @@ use App\Http\Controllers\MerchantController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ContactController;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
