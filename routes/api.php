@@ -73,6 +73,13 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
             Route::post('/profile/image', 'updateProfileImage');
         });
         Route::apiResource('/contacts', ContactController::class)->only(['index', 'store', 'update', 'destroy']);
+        // Route::delete('/contacts/sequential/{id}', [ContactController::class, 'destroyBySequentialId']);
+        // Add these routes to your routes file
+        Route::get('/contacts', [ContactController::class, 'index']);
+        Route::get('/contacts/users', [ContactController::class, 'getUsers']); // Get all users to add
+        Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']); // Add users to contacts
+        Route::delete('/contacts', [ContactController::class, 'destroy']);
+        Route::delete('/contacts/sequential/{id}', [ContactController::class, 'destroyBySequentialId']);
     });
 
     Route::controller(AuthController::class)->group(function() {
