@@ -76,8 +76,14 @@ class AuthController extends Controller
                 'email_verified_at' => $user->email_verified_at,
             ];
 
+            // Include user-specific fields if user type is user
+            if ($userType === 'user') {
+                $responseUser['user_id'] = $user->user_id;
+            }
+
             // Include merchant-specific fields if user type is merchant
             if ($userType === 'merchant') {
+                $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
                 $responseUser['address'] = $user->address;
                 $responseUser['reg_number'] = $user->reg_number;
@@ -139,8 +145,14 @@ class AuthController extends Controller
                 'email_verified_at' => $user->email_verified_at, 
             ];
 
+            // Include user-specific fields if user type is user
+            if ($userType === 'user') {
+                $responseUser['user_id'] = $user->user_id;
+            }
+
             // Include merchant-specific fields if user type is merchant
             if ($userType === 'merchant') {
+                $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
                 $responseUser['address'] = $user->address;
                 $responseUser['reg_number'] = $user->reg_number;
@@ -294,9 +306,6 @@ class AuthController extends Controller
             $user->save();
         }
 
-
-       
-        
         $user->save();
 
         return response()->json(['message' => 'Password changed successfully.']);
