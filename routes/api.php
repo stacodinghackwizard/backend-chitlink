@@ -77,9 +77,32 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
         // Add these routes to your routes file
         Route::get('/contacts', [ContactController::class, 'index']);
         Route::get('/contacts/users', [ContactController::class, 'getUsers']); // Get all users to add
-        Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']); // Add users to contacts
+        // Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']); // Add users to contacts
+        // Route::delete('/contacts', [ContactController::class, 'destroy']);
+        // Route::delete('/contacts/sequential/{id}', [ContactController::class, 'destroyBySequentialId']);
+
+        Route::post('/contacts', [ContactController::class, 'store']);
+        Route::put('/contacts/{id}', [ContactController::class, 'update']);
         Route::delete('/contacts', [ContactController::class, 'destroy']);
-        Route::delete('/contacts/sequential/{id}', [ContactController::class, 'destroyBySequentialId']);
+
+
+        // Bulk operations
+        Route::delete('/contacts/bulk', [ContactController::class, 'bulkDestroy']);
+        Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']);
+        
+        // Group management routes
+        Route::prefix('contact-groups')->group(function () {
+            // Group CRUD
+            Route::get('/', [ContactController::class, 'getGroups']);
+            Route::post('/', [ContactController::class, 'createGroup']);
+            Route::put('/{id}', [ContactController::class, 'updateGroup']);
+            Route::delete('/{id}', [ContactController::class, 'deleteGroup']);
+            
+            // Group membership management
+            Route::get('/{id}/contacts', [ContactController::class, 'getGroupContacts']);
+            Route::post('/{id}/contacts', [ContactController::class, 'addContactsToGroup']);
+            Route::delete('/{id}/contacts', [ContactController::class, 'removeContactsFromGroup']);
+        });
     });
 
     Route::controller(AuthController::class)->group(function() {
@@ -87,6 +110,10 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
         Route::post('/change-password', 'changePassword');
         Route::post('/logout','logout');
     });
+
+
+
+
 
    
 });

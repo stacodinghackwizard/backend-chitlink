@@ -5,15 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Contact extends Model
+class ContactGroup extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'merchant_id',
         'name',
-        'email',
-        'phone_number'
+        'description',
+        'color'
     ];
 
     protected $casts = [
@@ -22,7 +22,7 @@ class Contact extends Model
     ];
 
     /**
-     * Get the merchant that owns the contact.
+     * Get the merchant that owns the contact group.
      */
     public function merchant()
     {
@@ -30,28 +30,20 @@ class Contact extends Model
     }
 
     /**
-     * Get the groups that this contact belongs to.
+     * Get the contacts that belong to this group.
      */
-    public function groups()
+    public function contacts()
     {
-        return $this->belongsToMany(ContactGroup::class, 'contact_group_members', 'contact_id', 'contact_group_id')
+        return $this->belongsToMany(Contact::class, 'contact_group_members', 'contact_group_id', 'contact_id')
                     ->withTimestamps();
     }
 
     /**
-     * Get the group colors for this contact (for display)
+     * Get the count of contacts in this group.
      */
-    public function getGroupColorsAttribute()
+    public function getContactsCountAttribute()
     {
-        return $this->groups()->pluck('color')->toArray();
-    }
-
-    /**
-     * Get the group names for this contact
-     */
-    public function getGroupNamesAttribute()
-    {
-        return $this->groups()->pluck('name')->toArray();
+        return $this->contacts()->count();
     }
 
     /**
