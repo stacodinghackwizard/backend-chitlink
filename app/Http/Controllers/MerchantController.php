@@ -17,8 +17,8 @@ class MerchantController extends Controller
 {
     public function register(MerchantRegisterRequest $request)
     {
-        Log::info($request->all()); // Log the request data
-        $path = null; // Initialize path as null
+        Log::info($request->all()); 
+        $path = null; 
 
         if ($request->hasFile('cac_certificate')) {
             $path = $request->file('cac_certificate')->store('cac_certificates'); 
@@ -31,12 +31,12 @@ class MerchantController extends Controller
                 'phone_number' => $request->phone_number,
                 'address' => $request->address,
                 'reg_number' => $request->reg_number,
-                'cac_certificate' => $path, // Save the file path or null
+                'cac_certificate' => $path, 
                 'password' => Hash::make($request->password),
             ]);
 
             // Send verification email
-            event(new Registered($merchant)); // This will trigger the email verification
+            event(new Registered($merchant)); 
 
             return response()->json([
                 'status' => 'success',
@@ -57,7 +57,7 @@ class MerchantController extends Controller
     {
         $merchant = Auth::user(); 
 
-        // Retrieve the merchant from the database using the authenticated user's ID
+       
         $merchant = Merchant::find($merchant->id);
 
         $utilityBillPath = null;
