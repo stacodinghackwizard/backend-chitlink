@@ -17,8 +17,8 @@ class MerchantController extends Controller
 {
     public function register(MerchantRegisterRequest $request)
     {
-        Log::info($request->all()); 
-        $path = null; 
+        Log::info($request->all()); // Log the request data
+        $path = null; // Initialize path as null
 
         if ($request->hasFile('cac_certificate')) {
             $path = $request->file('cac_certificate')->store('cac_certificates'); 
@@ -31,12 +31,12 @@ class MerchantController extends Controller
                 'phone_number' => $request->phone_number,
                 'address' => $request->address,
                 'reg_number' => $request->reg_number,
-                'cac_certificate' => $path, 
+                'cac_certificate' => $path, // Save the file path or null
                 'password' => Hash::make($request->password),
             ]);
 
             // Send verification email
-            event(new Registered($merchant)); 
+            event(new Registered($merchant)); // This will trigger the email verification
 
             return response()->json([
                 'status' => 'success',
@@ -57,7 +57,7 @@ class MerchantController extends Controller
     {
         $merchant = Auth::user(); 
 
-       
+        
         $merchant = Merchant::find($merchant->id);
 
         $utilityBillPath = null;
@@ -78,7 +78,7 @@ class MerchantController extends Controller
         ], 200);
     }
 
-    // Get Merchant Profile
+
     public function profile()
     {
         
@@ -97,7 +97,7 @@ class MerchantController extends Controller
         ], 200);
     }
 
-    // Update Merchant Profile
+  
     public function updateProfile(Request $request)
     {
        
@@ -133,7 +133,7 @@ class MerchantController extends Controller
         return response()->json(['message' => 'User not authenticated.'], 401);
     }
 
-    // Debug: Log all request data
+    
     Log::info('Request data:', [
         'all_data' => $request->all(),
         'files' => $request->allFiles(),
@@ -142,7 +142,7 @@ class MerchantController extends Controller
         'method' => $request->method()
     ]);
 
-    // Check if file exists before validation
+   
     if (!$request->hasFile('profile_image')) {
         return response()->json([
             'message' => 'No profile image file found in request.',
@@ -170,10 +170,10 @@ class MerchantController extends Controller
     }
 
     try {
-        // Store the image
+        
         $path = $request->file('profile_image')->store('profile_images');
 
-        // Update the merchant's profile image path
+       
         $merchant->profile_image = $path;
         $merchant->save();
 

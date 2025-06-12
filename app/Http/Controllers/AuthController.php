@@ -26,7 +26,7 @@ class AuthController extends Controller
         $password = Hash::make($request->password);
         $path = null;
 
-        // Check if the email already exists
+       
         if ($userType === 'merchant' && Merchant::where('email', $request->email)->exists()) {
             return response()->json([
                 'status' => 'error',
@@ -53,7 +53,7 @@ class AuthController extends Controller
 
                 Log::info('Creating merchant with data:', $creatableData);
                 $user = Merchant::create($creatableData);
-            } else { // Default to 'user'
+            } else { 
                 $creatableData = [
                     'name' => explode('@', $request->email)[0],
                     'email' => $request->email,
@@ -66,7 +66,7 @@ class AuthController extends Controller
            
             $this->sendOtp($user);
 
-            // Prepare response with relevant fields
+           
             $responseUser = [
                 'id' => $user->id,
                 'email' => $user->email,
@@ -76,8 +76,14 @@ class AuthController extends Controller
                 'email_verified_at' => $user->email_verified_at,
             ];
 
-            // Include merchant-specific fields if user type is merchant
+            
+            if ($userType === 'user') {
+                $responseUser['user_id'] = $user->user_id;
+            }
+
+            
             if ($userType === 'merchant') {
+                $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
                 $responseUser['address'] = $user->address;
                 $responseUser['reg_number'] = $user->reg_number;
@@ -110,16 +116,16 @@ class AuthController extends Controller
         $userType = $request->user_type;
         $credentials = $request->only('email', 'password');
 
-        // Attempt to authenticate the user based on user type
+        
         if ($userType === 'merchant') {
             $user = Merchant::where('email', $request->email)->first();
         } else {
             $user = User::where('email', $request->email)->first();
         }
 
-        // Check if user exists and verify password
+       
         if ($user && Hash::check($request->password, $user->password)) {
-            // Check for email verification (if applicable)
+           
             if (method_exists($user, 'hasVerifiedEmail') && !$user->hasVerifiedEmail()) {
                 return response()->json([
                     'status' => 'error',
@@ -139,8 +145,14 @@ class AuthController extends Controller
                 'email_verified_at' => $user->email_verified_at, 
             ];
 
-            // Include merchant-specific fields if user type is merchant
+           
+            if ($userType === 'user') {
+                $responseUser['user_id'] = $user->user_id;
+            }
+
+            
             if ($userType === 'merchant') {
+                $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
                 $responseUser['address'] = $user->address;
                 $responseUser['reg_number'] = $user->reg_number;
@@ -175,12 +187,12 @@ class AuthController extends Controller
     {
         $user = Auth::user(); 
 
-        // Ensure the user is an instance of the correct model
+        
         if (!$user) {
             return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
         }
 
-        // Update KYC information for both users and merchants
+        
         $user->update([
             'nin' => $request->nin,
             'bvn' => $request->bvn,
@@ -198,7 +210,7 @@ class AuthController extends Controller
     {
         $request->validate([
             'user_type' => 'required|in:user,merchant',
-            'contact' => 'required|string', // This can be either email or phone number
+            'contact' => 'required|string', 
         ]);
 
         $userType = $request->user_type;
@@ -215,15 +227,15 @@ class AuthController extends Controller
             return response()->json(['status' => 'error', 'message' => 'User or merchant not found.'], 404);
         }
 
-        // Generate a 4-digit alphanumeric OTP
+        
         $otp = Str::random(4);
 
-        // Save the OTP and its expiration time
+       
         $user->password_reset_code = $otp;
         $user->password_reset_expires_at = now()->addMinutes(10);
         $user->save();
 
-        // Send OTP via email
+        
         Mail::to($user->email)->send(new ForgotPasswordMail($user, $otp));
 
         return response()->json(['status' => 'success', 'message' => 'Verification code sent.']);
@@ -294,9 +306,6 @@ class AuthController extends Controller
             $user->save();
         }
 
-
-       
-        
         $user->save();
 
         return response()->json(['message' => 'Password changed successfully.']);
@@ -317,7 +326,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'User not authenticated.'], 401);
         }
 
-        // Revoke all tokens for the user
+     
         $user->tokens()->delete();
 
         return response()->json(['message' => ucfirst($userType) . ' logged out successfully.']);
