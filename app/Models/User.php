@@ -23,6 +23,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'phone_number',
         'password',
+        'user_id',
         'nin',
         'bvn',
         'utility_bill_path',
@@ -53,5 +54,31 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Boot method to generate unique user ID
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($user) {
+            if (empty($user->user_id)) {
+                $user->user_id = self::generateUniqueUserId();
+            }
+        });
+    }
+
+    /**
+     * Generate a unique user ID
+     */
+    private static function generateUniqueUserId()
+    {
+        do {
+            $userId = 'USR' . str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+        } while (self::where('user_id', $userId)->exists());
+
+        return $userId;
     }
 }
