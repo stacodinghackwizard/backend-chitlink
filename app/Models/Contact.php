@@ -13,8 +13,11 @@ class Contact extends Model
         'merchant_id',
         'name',
         'email',
-        'phone_number'
+        'phone_number',
+        'profile_image'
     ];
+
+    protected $appends = ['profile_image_url'];
 
     protected $casts = [
         'created_at' => 'datetime',
@@ -60,5 +63,13 @@ class Contact extends Model
     public function scopeForMerchant($query, $merchantId)
     {
         return $query->where('merchant_id', $merchantId);
+    }
+
+    public function getProfileImageUrlAttribute()
+    {
+        if ($this->profile_image) {
+            return asset('storage/' . $this->profile_image);
+        }
+        return null;
     }
 }
