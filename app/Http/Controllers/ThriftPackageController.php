@@ -9,6 +9,7 @@ use App\Models\ThriftContributor;
 use App\Models\ThriftSlot;
 use App\Models\ThriftTransaction;
 use App\Models\Contact;
+use Illuminate\Validation\Rule;
 
 class ThriftPackageController extends Controller
 {
@@ -17,96 +18,338 @@ class ThriftPackageController extends Controller
         $this->middleware(['auth:sanctum']); // Add merchant guard/middleware as needed
     }
 
-    // List all thrift packages for merchant
+    // List all thrift packages for merchant or user admin
     public function index(Request $request)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $packages = ThriftPackage::where('merchant_id', $merchant->id)->get();
+
+        if ($merchant) {
+            $packages = ThriftPackage::where('merchant_id', $merchant->id)->get();
+        } elseif ($user) {
+            $packages = ThriftPackage::where(function($q) use ($user) {
+                $q->where(function($q2) use ($user) {
+                    $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                })->orWhereHas('admins', function($q3) use ($user) {
+                    $q3->where('users.id', $user->id);
+                });
+            })->get();
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         return response()->json($packages);
     }
 
     // Create thrift package (step 1)
     public function store(Request $request)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
+
+        $rules = [
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('thrift_packages')->where(function ($query) use ($user, $merchant) {
+                    if ($merchant) {
+                        return $query->where('created_by_type', 'merchant')
+                                     ->where('created_by_id', $merchant->id);
+                    } elseif ($user) {
+                        return $query->where('created_by_type', 'user')
+                                     ->where('created_by_id', $user->id);
+                    }
+                    return $query;
+                }),
+            ],
             'total_amount' => 'required|numeric|min:1',
             'duration_days' => 'required|integer|min:1',
             'slots' => 'required|integer|min:1',
-        ]);
-        $validated['merchant_id'] = $merchant->id;
+        ];
+        $validated = $request->validate($rules);
+
+        if ($merchant) {
+            $validated['merchant_id'] = $merchant->id;
+            $validated['created_by_type'] = 'merchant';
+            $validated['created_by_id'] = $merchant->id;
+        } elseif ($user) {
+            $validated['merchant_id'] = null; // Explicitly set to null for user
+            $validated['created_by_type'] = 'user';
+            $validated['created_by_id'] = $user->id;
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
         $package = ThriftPackage::create($validated);
+
+        // Only add as admin if user (not merchant)
+        if ($user) {
+            $package->admins()->syncWithoutDetaching([$user->id]);
+        }
+
         return response()->json($package, 201);
     }
 
     // Show thrift package details
     public function show($id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->with(['contributors.contact', 'slots', 'transactions'])->firstOrFail();
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->with(['contributors.contact', 'slots', 'transactions'])->firstOrFail();
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->with(['contributors.contact', 'slots', 'transactions'])
+                ->firstOrFail();
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         return response()->json($package);
     }
 
     // Update T&C
     public function updateTerms(Request $request, $id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->firstOrFail();
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         $request->validate(['terms_accepted' => 'required|boolean']);
         $package->terms_accepted = $request->terms_accepted;
         $package->save();
         return response()->json($package);
     }
 
-    // Add contributors
+    // Add contributors (merchant only for now)
     public function addContributors(Request $request, $id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)
-            ->where('merchant_id', $merchant->id)
-            ->firstOrFail();
-
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)
+                ->where('merchant_id', $merchant->id)
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+            $request->validate([
+                'contributor_ids' => 'required|array|min:1',
+                'contributor_ids.*' => 'integer',
+            ]);
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+            $request->validate([
+                'contributor_ids' => 'required|array|min:1',
+                'contributor_ids.*' => 'integer|exists:users,id',
+            ]);
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         // Block if T&C not accepted
         if (!$package->terms_accepted) {
             return response()->json([
                 'message' => 'You must accept the Terms & Conditions before adding contributors.'
             ], 403);
         }
-
-        $request->validate([
-            'contributor_ids' => 'required|array|min:1',
-            'contributor_ids.*' => 'integer|exists:contacts,id',
-        ]);
         $added = [];
-        foreach ($request->contributor_ids as $contactId) {
-            $added[] = ThriftContributor::firstOrCreate([
-                'thrift_package_id' => $package->id,
-                'contact_id' => $contactId,
-            ]);
+        $errors = [];
+        if ($merchant) {
+            foreach ($request->contributor_ids as $id) {
+                $userModel = \App\Models\User::find($id);
+                $contactModel = \App\Models\Contact::find($id);
+                if ($userModel) {
+                    $added[] = ThriftContributor::firstOrCreate([
+                        'thrift_package_id' => $package->id,
+                        'user_id' => $id,
+                    ]);
+                } elseif ($contactModel) {
+                    $added[] = ThriftContributor::firstOrCreate([
+                        'thrift_package_id' => $package->id,
+                        'contact_id' => $id,
+                    ]);
+                } else {
+                    $errors[] = $id;
+                }
+            }
+        } elseif ($user) {
+            foreach ($request->contributor_ids as $userId) {
+                $userModel = \App\Models\User::find($userId);
+                if ($userModel) {
+                    $added[] = ThriftContributor::firstOrCreate([
+                        'thrift_package_id' => $package->id,
+                        'user_id' => $userId,
+                    ]);
+                } else {
+                    $errors[] = $userId;
+                }
+            }
         }
-        return response()->json(['contributors' => $added]);
+        $publicUser = function ($user) {
+            if (!$user) return null;
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone_number' => $user->phone_number,
+                'profile_image_url' => $user->profile_image_url ?? null,
+            ];
+        };
+        $publicContact = function ($contact) {
+            if (!$contact) return null;
+            return [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'phone_number' => $contact->phone_number,
+                'profile_image_url' => $contact->profile_image_url ?? null,
+            ];
+        };
+        // Transform the response to always show user_id/contact_id and user/contact public details
+        $contributors = collect($added)->map(function ($contributor) use ($publicUser, $publicContact) {
+            return [
+                'id' => $contributor->id,
+                'thrift_package_id' => $contributor->thrift_package_id,
+                'user_id' => $contributor->user_id,
+                'contact_id' => $contributor->contact_id,
+                'status' => $contributor->status,
+                'created_at' => $contributor->created_at,
+                'updated_at' => $contributor->updated_at,
+                'user' => $publicUser($contributor->user),
+                'contact' => $publicContact($contributor->contact),
+            ];
+        });
+        $response = [
+            'message' => 'Contributors added successfully.',
+            'contributors' => $contributors,
+        ];
+        if (!empty($errors)) {
+            $response['invalid_contributor_ids'] = $errors;
+            $response['error_message'] = 'Some contributor IDs were invalid and not added.';
+        }
+        return response()->json($response);
     }
 
     // Get contributors
     public function getContributors($id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
-        $contributors = $package->contributors()->with('contact')->get();
+        $package = ThriftPackage::find($id);
+        if (!$package) {
+            return response()->json(['message' => 'Thrift package not found.'], 404);
+        }
+
+        $hasAccess = false;
+        if ($merchant && $package->merchant_id === $merchant->id) {
+            $hasAccess = true;
+        } elseif ($user && (
+            ($package->created_by_type === 'user' && $package->created_by_id === $user->id) ||
+            $package->admins()->where('users.id', $user->id)->exists()
+        )) {
+            $hasAccess = true;
+        }
+
+        if (!$hasAccess) {
+            return response()->json(['message' => 'Forbidden: You do not have access to this thrift package.'], 403);
+        }
+
+        $contributors = $package->contributors()->with(['contact', 'user'])->get();
+        $publicUser = function ($user) {
+            if (!$user) return null;
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone_number' => $user->phone_number,
+                'profile_image_url' => $user->profile_image_url ?? null,
+            ];
+        };
+        $publicContact = function ($contact) {
+            if (!$contact) return null;
+            return [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'phone_number' => $contact->phone_number,
+                'profile_image_url' => $contact->profile_image_url ?? null,
+            ];
+        };
+        $contributors = $contributors->map(function ($contributor) use ($publicUser, $publicContact) {
+            return [
+                'id' => $contributor->id,
+                'thrift_package_id' => $contributor->thrift_package_id,
+                'user_id' => $contributor->user_id,
+                'contact_id' => $contributor->contact_id,
+                'status' => $contributor->status,
+                'created_at' => $contributor->created_at,
+                'updated_at' => $contributor->updated_at,
+                'user' => $publicUser($contributor->user),
+                'contact' => $publicContact($contributor->contact),
+            ];
+        });
         return response()->json(['contributors' => $contributors]);
     }
 
     // Confirm contributors
     public function confirmContributors(Request $request, $id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)
-            ->where('merchant_id', $merchant->id)
-            ->firstOrFail();
-
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)
+                ->where('merchant_id', $merchant->id)
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         $contributorIds = $request->input('contributor_ids');
-
         if ($contributorIds && is_array($contributorIds)) {
             // Confirm only specified contributors
             $confirmed = ThriftContributor::where('thrift_package_id', $package->id)
@@ -117,7 +360,6 @@ class ThriftPackageController extends Controller
             $confirmed = ThriftContributor::where('thrift_package_id', $package->id)
                 ->update(['status' => 'confirmed']);
         }
-
         return response()->json([
             'message' => 'Contributors confirmed successfully.',
             'confirmed_count' => $confirmed
@@ -127,27 +369,46 @@ class ThriftPackageController extends Controller
     // Generate slots (FIFO)
     public function generateSlots($id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)
-            ->where('merchant_id', $merchant->id)
-            ->with(['contributors' => function($q) {
-                $q->where('status', 'confirmed')->orderBy('created_at', 'asc');
-            }])
-            ->firstOrFail();
-
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)
+                ->where('merchant_id', $merchant->id)
+                ->with(['contributors' => function($q) {
+                    $q->where('status', 'confirmed')->orderBy('created_at', 'asc');
+                }])
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->with(['contributors' => function($q) {
+                    $q->where('status', 'confirmed')->orderBy('created_at', 'asc');
+                }])
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         $contributors = $package->contributors;
         $slotCount = $package->slots;
-
         if ($contributors->isEmpty()) {
             return response()->json(['message' => 'No confirmed contributors to assign slots.'], 400);
         }
-
         // Only generate as many slots as there are contributors (FIFO)
         $slotsToGenerate = min($slotCount, $contributors->count());
-
         // Remove existing slots to avoid duplicates
         $package->slots()->delete();
-
         $slots = [];
         for ($i = 0; $i < $slotsToGenerate; $i++) {
             $contributor = $contributors[$i];
@@ -158,7 +419,6 @@ class ThriftPackageController extends Controller
                 'status' => 'pending',
             ]);
         }
-
         return response()->json([
             'message' => 'Slots generated successfully (FIFO, one per contributor).',
             'slots' => $slots
@@ -168,8 +428,23 @@ class ThriftPackageController extends Controller
     // Get transactions
     public function transactions($id)
     {
+        $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
+        if ($merchant) {
+            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
+        } elseif ($user) {
+            $package = ThriftPackage::where('id', $id)
+                ->where(function($q) use ($user) {
+                    $q->where(function($q2) use ($user) {
+                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    })->orWhereHas('admins', function($q3) use ($user) {
+                        $q3->where('users.id', $user->id);
+                    });
+                })
+                ->firstOrFail();
+        } else {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
         $transactions = $package->transactions;
         return response()->json(['transactions' => $transactions]);
     }
@@ -209,15 +484,24 @@ class ThriftPackageController extends Controller
         ]);
 
         $thriftPackage = \App\Models\ThriftPackage::findOrFail($id);
-        $user = \App\Models\User::findOrFail($request->user_id);
 
-        // Attach the user as an admin for this thrift package
-        $thriftPackage->admins()->syncWithoutDetaching([$user->id]);
+        $merchant = Auth::guard('merchant')->user();
+        $user = Auth::user();
+
+        $isMerchantOwner = $merchant && $thriftPackage->merchant_id === $merchant->id;
+        $isAdmin = $user && $thriftPackage->admins()->where('users.id', $user->id)->exists();
+
+        if (!$isMerchantOwner && !$isAdmin) {
+            return response()->json(['message' => 'Forbidden: Only the merchant or an existing admin can add another admin.'], 403);
+        }
+
+        $newAdmin = \App\Models\User::findOrFail($request->user_id);
+        $thriftPackage->admins()->syncWithoutDetaching([$newAdmin->id]);
 
         return response()->json([
             'status' => 'success',
             'message' => 'User added as admin to this thrift package.',
-            'admin_user_id' => $user->id,
+            'admin_user_id' => $newAdmin->id,
         ]);
     }
 } 

@@ -12,6 +12,7 @@ class ThriftContributor extends Model
     protected $fillable = [
         'thrift_package_id',
         'contact_id',
+        'user_id',
         'status',
     ];
 
@@ -33,6 +34,11 @@ class ThriftContributor extends Model
     public function transactions()
     {
         return $this->hasMany(ThriftTransaction::class, 'contributor_id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function getProfileImageUrlAttribute()
