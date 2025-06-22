@@ -53,4 +53,12 @@ class ContactGroup extends Model
     {
         return $query->where('merchant_id', $merchantId);
     }
+
+    public function getProfileImageUrlAttribute()
+    {
+        if ($this->profile_image) {
+            return asset('storage/' . $this->profile_image);
+        }
+        return null;
+    }
 }

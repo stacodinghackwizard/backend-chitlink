@@ -32,7 +32,14 @@ class ContactController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'nullable|email',
             'phone_number' => 'nullable|string',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
         ]);
+
+
+        $profileImagePath = null;
+        if ($request->hasFile('profile_image')) {
+            $profileImagePath = $request->file('profile_image')->store('contact_images');
+        }
 
         // Check if the contact already exists for this merchant
         $contact = Contact::where('email', $request->email)
@@ -50,6 +57,7 @@ class ContactController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone_number' => $request->phone_number,
+                'profile_image' => $profileImagePath
             ]);
         }
 
@@ -80,7 +88,7 @@ class ContactController extends Controller
             $contacts = Contact::where('merchant_id', $merchant->id)
                               ->with('groups:id,name,color')
                               ->orderBy('created_at', 'asc')
-                              ->get(['id', 'name', 'email', 'phone_number', 'created_at', 'updated_at']);
+                              ->get(['id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
 
             foreach ($contacts as $contact) {
                 $combinedData->push([
@@ -89,6 +97,7 @@ class ContactController extends Controller
                     'name' => $contact->name,
                     'email' => $contact->email,
                     'phone_number' => $contact->phone_number,
+                    'profile_image' => $contact->profile_image_url,
                     'created_at' => $contact->created_at,
                     'updated_at' => $contact->updated_at,
                     'type' => 'contact',
@@ -109,7 +118,7 @@ class ContactController extends Controller
         // Add users if requested
         if ($filter === 'all' || $filter === 'users') {
             $users = User::orderBy('created_at', 'asc')
-                        ->get(['id', 'name', 'email', 'phone_number', 'created_at', 'updated_at']);
+                        ->get(['id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
 
             foreach ($users as $user) {
                 // Skip users that are already in contacts when showing 'all'
@@ -125,6 +134,7 @@ class ContactController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone_number' => $user->phone_number,
+                    'profile_image' => $user->profile_image_url ?? null,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                     'type' => 'user',
@@ -174,6 +184,7 @@ class ContactController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'phone_number' => $user->phone_number,
+                        'profile_image' => $user->profile_image_url,
                     ]);
                     
                     $addedContacts[] = $contact;
@@ -343,7 +354,7 @@ class ContactController extends Controller
         $groups = ContactGroup::where('merchant_id', $merchant->id)
                              ->withCount('contacts')
                              ->with(['contacts' => function($query) {
-                                 $query->select('contacts.id', 'name', 'email', 'phone_number');
+                                 $query->select('contacts.id', 'name', 'email', 'phone_number', 'profile_image');
                              }])
                              ->orderBy('created_at', 'desc')
                              ->get();
@@ -406,7 +417,7 @@ class ContactController extends Controller
             DB::commit();
 
             // Load the group with contacts
-            $group->load(['contacts:id,name,email,phone_number']);
+            $group->load(['contacts:id,name,email,phone_number,profile_image']);
             $group->loadCount('contacts');
 
             return response()->json([
@@ -574,6 +585,7 @@ class ContactController extends Controller
                                         'contacts.name',
                                         'contacts.email',
                                         'contacts.phone_number',
+                                        'contacts.profile_image',
                                         'contacts.created_at',
                                         'contacts.updated_at'
                                     );

@@ -81,4 +81,14 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return $userId;
     }
+
+    protected $appends = ['profile_image_url'];
+
+    public function getProfileImageUrlAttribute()
+    {
+        if ($this->profile_image) {
+            return asset('storage/' . $this->profile_image);
+        }
+        return null;
+    }
 }
