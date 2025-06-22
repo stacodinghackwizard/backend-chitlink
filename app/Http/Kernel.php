@@ -55,5 +55,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'check.kyc' => \App\Http\Middleware\CheckKyc::class,
         'kyc' => \App\Http\Middleware\CheckKyc::class,
+        'thrift.admin_or_merchant' => \App\Http\Middleware\CheckThriftAdminOrMerchant::class,
     ];
 }

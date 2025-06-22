@@ -91,4 +91,9 @@ class User extends Authenticatable implements MustVerifyEmail
         }
         return null;
     }
+
+    public function adminThriftPackages()
+    {
+        return $this->belongsToMany(ThriftPackage::class, 'thrift_admins');
+    }
 }
