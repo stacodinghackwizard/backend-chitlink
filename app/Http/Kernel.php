@@ -54,5 +54,6 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'check.kyc' => \App\Http\Middleware\CheckKyc::class,
+        'kyc' => \App\Http\Middleware\CheckKyc::class,
     ];
 }

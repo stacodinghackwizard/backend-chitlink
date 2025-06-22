@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\VerificationMail;
 use Illuminate\Support\Str;
 use App\Mail\ForgotPasswordMail;
+use Illuminate\Validation\Rule;
+use GuzzleHttp\Client;
 
 class AuthController extends Controller
 {
@@ -22,12 +24,56 @@ class AuthController extends Controller
     {
         Log::info('Unified Registration Attempt:', $request->all());
 
+        // Step 1: Validate user_type first
+        $request->validate([
+            'user_type' => 'required|in:user,merchant',
+            'password' => 'required|string|min:6',
+        ]);
+
+        // Treat empty strings as null for validation
+        $request->merge([
+            'email' => $request->email ?: null,
+            'phone_number' => $request->phone_number ?: null,
+        ]);
+
         $userType = $request->user_type;
         $password = Hash::make($request->password);
         $path = null;
 
-       
-        if ($userType === 'merchant' && Merchant::where('email', $request->email)->exists()) {
+        // Step 2: Now validate the rest based on user_type
+        if ($userType === 'merchant') {
+            $rules = [
+                'email' => [
+                    'required_without:phone_number',
+                    'nullable',
+                    'email',
+                    'unique:merchants,email',
+                ],
+                'phone_number' => [
+                    'required_without:email',
+                    'nullable',
+                    'string',
+                    'unique:merchants,phone_number',
+                    'regex:/^\\+?[0-9]{10,15}$/',
+                ],
+                'business_name' => 'required|string|max:255',
+                'address' => 'nullable|string',
+                'reg_number' => 'nullable|string',
+            ];
+        } else {
+            $rules = [
+                'email' => 'required|email|unique:users,email',
+                'phone_number' => 'required|string',
+            ];
+        }
+
+        $validated = $request->validate($rules);
+
+        if (
+            $userType === 'merchant' &&
+            $request->email &&
+            Merchant::where('email', $request->email)->exists()
+        ) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'The email has already been taken.'
@@ -48,7 +94,7 @@ class AuthController extends Controller
                     'reg_number' => $request->reg_number,
                     'password' => $password,
                     'cac_certificate' => $path,
-                    'name' => explode('@', $request->email)[0],
+                    'name' => $request->email ? explode('@', $request->email)[0] : $request->phone_number,
                 ];
 
                 Log::info('Creating merchant with data:', $creatableData);
@@ -63,10 +109,10 @@ class AuthController extends Controller
                 $user = User::create($creatableData);
             }
 
-           
-            $this->sendOtp($user);
+            if ($user->email) {
+                $this->sendOtp($user);
+            }
 
-           
             $responseUser = [
                 'id' => $user->id,
                 'email' => $user->email,
@@ -76,12 +122,10 @@ class AuthController extends Controller
                 'email_verified_at' => $user->email_verified_at,
             ];
 
-            
             if ($userType === 'user') {
                 $responseUser['user_id'] = $user->user_id;
             }
 
-            
             if ($userType === 'merchant') {
                 $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
@@ -90,10 +134,27 @@ class AuthController extends Controller
                 $responseUser['cac_certificate'] = $user->cac_certificate;
             }
 
+            $message = ucfirst($userType) . ' registration was successful. ';
+            if ($user->email) {
+                $message .= 'Please check your email to verify your account.';
+            } elseif ($user->phone_number) {
+                $message .= 'Please check your phone for your OTP.';
+            }
+
+            // Only return a token if the user is already verified (for some reason)
+            // $authorization = null;
+            $token = $user->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
+            $authorization = [
+                'token' => $token,
+                'type' => 'bearer',
+            ];
+           
+
             return response()->json([
                 'status' => 'success',
-                'message' => ucfirst($userType) . ' registration was successful. Please check your email to verify your account.',
+                'message' => $message,
                 'user' => $responseUser,
+                'authorization' => $authorization, // null if not verified yet
             ], 201);
 
         } catch (\Exception $e) {
@@ -133,7 +194,7 @@ class AuthController extends Controller
                 ], 403);
             }
 
-            $token = $user->createToken('API TOKEN')->plainTextToken;
+            $token = $user->createToken('API TOKEN', ['full_access'])->plainTextToken;
 
             // Prepare response without sensitive information
             $responseUser = [
@@ -180,28 +241,79 @@ class AuthController extends Controller
         $user->email_verification_code_expires_at = now()->addMinutes(10);
         $user->save();
 
-        Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
+        if ($user->email) {
+            Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
+        } elseif ($user->phone_number) {
+            $this->sendSmsOtp($user->phone_number, $verificationCode);
+        }
+    }
+
+    private function sendSmsOtp($phone, $code)
+    {
+        $apiKey = env('TERMII_API_KEY');
+        $senderId = env('TERMII_SENDER_ID', 'N-Alert'); // Use 'N-Alert' if your sender ID is not approved yet
+        $message = "Your OTP is: $code";
+        $url = "https://v3.api.termii.com/api/sms/send";
+
+        // Convert phone to international format if needed
+        if (preg_match('/^0[0-9]{10}$/', $phone)) {
+            $phone = '234' . substr($phone, 1);
+        }
+
+        $client = new \GuzzleHttp\Client();
+        try {
+            $response = $client->post($url, [
+                'json' => [
+                    'to' => $phone,
+                    'from' => $senderId,
+                    'sms' => $message,
+                    'type' => 'plain',
+                    'channel' => 'generic',
+                    'api_key' => $apiKey,
+                ]
+            ]);
+            $body = json_decode($response->getBody(), true);
+            Log::info('Termii SMS response:', $body);
+        } catch (\Exception $e) {
+            Log::error('Termii SMS error: ' . $e->getMessage());
+        }
     }
 
     public function completeKyc(KycRequest $request)
     {
         $user = Auth::user(); 
 
-        
+        // Check if user is verified (email or phone)
+        $isVerified = false;
+        if (isset($user->email_verified_at) && $user->email_verified_at) {
+            $isVerified = true;
+        }
+        if (isset($user->phone_verified_at) && $user->phone_verified_at) {
+            $isVerified = true;
+        }
+        if (!$isVerified) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Account must be verified before submitting KYC.'
+            ], 403);
+        }
+
         if (!$user) {
             return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
         }
 
-        
         $user->update([
             'nin' => $request->nin,
             'bvn' => $request->bvn,
             'utility_bill_path' => $request->file('utility_bill')->store('utility_bills'),
         ]);
 
+        // Revoke/delete the current KYC token after successful KYC submission
+        $request->user()->currentAccessToken()->delete();
+
         return response()->json([
             'status' => 'success',
-            'message' => 'KYC information updated successfully.',
+            'message' => 'KYC information updated successfully. Please login to access your account.',
             'user' => $user,
         ], 200);
     }
