@@ -201,4 +201,23 @@ class ThriftPackageController extends Controller
         // Implement decline logic
         return response()->json(['message' => 'Slot request declined (stub)']);
     }
+
+    public function addAdmin(Request $request, $id)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        $thriftPackage = \App\Models\ThriftPackage::findOrFail($id);
+        $user = \App\Models\User::findOrFail($request->user_id);
+
+        // Attach the user as an admin for this thrift package
+        $thriftPackage->admins()->syncWithoutDetaching([$user->id]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'User added as admin to this thrift package.',
+            'admin_user_id' => $user->id,
+        ]);
+    }
 } 

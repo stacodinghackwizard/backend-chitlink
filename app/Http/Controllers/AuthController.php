@@ -385,21 +385,15 @@ class AuthController extends Controller
     {
         $request->validate([
             'user_type' => 'required|in:user,merchant',
-            'email' => 'required|email',
             'current_password' => 'required|string',
             'new_password' => 'required|string|min:8|confirmed',
         ]);
 
         $userType = $request->user_type;
-        $credentials = [
-            'email' => $request->email,
-            'password' => $request->current_password,
-        ];
-
-        if($userType === 'merchant'){
-            $user = Merchant::where('email', $request->email)->first();
-        }else{
-            $user = User::where('email', $request->email)->first();
+        if ($userType === 'merchant') {
+            $user = Auth::guard('merchant')->user();
+        } else {
+            $user = Auth::user();
         }
 
         if(!$user){
@@ -410,15 +404,12 @@ class AuthController extends Controller
             return response()->json(['message' => 'Current password is incorrect.'], 403);
         }
 
-        if($userType === 'merchant'){
+        if ($user instanceof \Illuminate\Database\Eloquent\Model) {
             $user->password = Hash::make($request->new_password);
             $user->save();
-        }else{
-            $user->password = Hash::make($request->new_password);
-            $user->save();
+        } else {
+            return response()->json(['message' => 'User model error.'], 500);
         }
-
-        $user->save();
 
         return response()->json(['message' => 'Password changed successfully.']);
     }
@@ -430,15 +421,16 @@ class AuthController extends Controller
         ]);
 
         $userType = $request->user_type;
-        $guard = $userType === 'merchant' ? 'merchant' : 'web';
-
-        $user = Auth::guard($guard)->user();
+        if ($userType === 'merchant') {
+            $user = Auth::guard('merchant')->user();
+        } else {
+            $user = Auth::user(); // Use Sanctum's default guard for users
+        }
 
         if (!$user) {
             return response()->json(['message' => 'User not authenticated.'], 401);
         }
 
-     
         $user->tokens()->delete();
 
         return response()->json(['message' => ucfirst($userType) . ' logged out successfully.']);
