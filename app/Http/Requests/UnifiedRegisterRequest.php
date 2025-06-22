@@ -24,13 +24,13 @@ class UnifiedRegisterRequest extends FormRequest
     {
         return [
             'user_type' => ['required', Rule::in(['user', 'merchant'])],
-            'email' => 'required|string|email|max:255|unique:users,email' . ($this->user_type === 'merchant' ? '|unique:merchants,email' : ''), // Check uniqueness in both tables if merchant
             'password' => 'required|string|min:8|confirmed',
-            'phone_number' => 'required|string|max:15',
-            
+
+            // Do NOT require email or phone_number here!
+            // Let the controller handle conditional validation.
+
             // Merchant specific fields (required if user_type is merchant)
             'business_name' => 'required_if:user_type,merchant|string|max:255',
-            
             'address' => 'required_if:user_type,merchant|string|max:255',
             'reg_number' => 'required_if:user_type,merchant|string|max:255',
             'cac_certificate' => 'nullable|required_if:user_type,merchant|file|mimes:pdf,jpg,jpeg,png|max:2048',
@@ -49,10 +49,12 @@ class UnifiedRegisterRequest extends FormRequest
             'user_type.in' => 'The user type must be either user or merchant.',
             'email.unique' => 'The email has already been taken.',
             'business_name.required_if' => 'The business name is required for merchants.',
-            'phone_number.required_if' => 'The phone number is required for merchants.',
+            // 'phone_number.required_if' => 'The phone number is required for merchants.',
             'address.required_if' => 'The address is required for merchants.',
             'reg_number.required_if' => 'The registration number is required for merchants.',
             'cac_certificate.required_if' => 'The CAC certificate is required for merchants.',
+            'email.required_without' => 'Either email or phone number is required for merchants.',
+            'phone_number.required_without' => 'Either phone number or email is required for merchants.',
         ];
     }
 }

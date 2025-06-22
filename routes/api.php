@@ -46,13 +46,13 @@ Route::middleware([EnsureFrontendRequestsAreStateful::class, 'auth:sanctum'])->g
 
 
 
-// KYC Route (requires authentication)
-Route::middleware(['auth:sanctum'])->group(function () {
+// KYC Route (requires authentication and kyc ability)
+Route::middleware(['auth:sanctum', 'ability:kyc'])->group(function () {
     Route::post('/kyc', [AuthController::class, 'completeKyc']);
 });
 
-// User and Merchant Routes (KYC check applied)
-Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->group(function () {
+// User and Merchant Routes (KYC check applied, requires full_access ability)
+Route::middleware(['auth:sanctum', 'ability:full_access', \App\Http\Middleware\CheckKyc::class])->group(function () {
     // User Routes
     Route::prefix('users')->group(function () {
         Route::controller(UserController::class)->group(function() {

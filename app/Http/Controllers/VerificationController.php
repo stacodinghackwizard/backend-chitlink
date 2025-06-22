@@ -52,7 +52,18 @@ class VerificationController extends Controller
                 $merchant->email_verification_code = null;
                 $merchant->save();
 
-                return response()->json(['message' => 'Merchant email verified successfully.']);
+                // Generate token for KYC (with only 'kyc' ability)
+                $token = $merchant->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
+                $authorization = [
+                    'token' => $token,
+                    'type' => 'bearer',
+                ];
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Merchant email verified successfully.',
+                    // 'authorization' => $authorization,
+                ]);
             }
             return response()->json(['message' => 'Invalid verification code for merchant.'], 400);
         }
@@ -66,7 +77,18 @@ class VerificationController extends Controller
                 $user->email_verification_code = null;
                 $user->save();
 
-                return response()->json(['message' => 'User email verified successfully.']);
+                // Generate token for KYC (with only 'kyc' ability)
+                // $token = $user->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
+                // $authorization = [
+                //     'token' => $token,
+                //     'type' => 'bearer',
+                // ];
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'User email verified successfully.',
+                    // 'authorization' => $authorization,
+                ]);
             }
             return response()->json(['message' => 'Invalid verification code for user.'], 400);
         }
