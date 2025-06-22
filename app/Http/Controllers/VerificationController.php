@@ -53,11 +53,11 @@ class VerificationController extends Controller
                 $merchant->save();
 
                 // Generate token for KYC (with only 'kyc' ability)
-                $token = $merchant->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
-                $authorization = [
-                    'token' => $token,
-                    'type' => 'bearer',
-                ];
+                // $token = $merchant->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
+                // $authorization = [
+                //     'token' => $token,
+                //     'type' => 'bearer',
+                // ];
 
                 return response()->json([
                     'status' => 'success',
