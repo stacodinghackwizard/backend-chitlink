@@ -11,6 +11,7 @@ class ThriftPackage extends Model
 
     protected $fillable = [
         'merchant_id',
+        'user_id',
         'name',
         'total_amount',
         'duration_days',
@@ -18,6 +19,8 @@ class ThriftPackage extends Model
         'terms',
         'terms_accepted',
         'status',
+        'created_by_type',
+        'created_by_id',
     ];
 
     public function merchant()
@@ -51,5 +54,10 @@ class ThriftPackage extends Model
             return asset('storage/' . $this->profile_image);
         }
         return null;
+    }
+
+    public function getUserIdAttribute()
+    {
+        return $this->created_by_type === 'user' ? $this->created_by_id : null;
     }
 } 
