@@ -83,11 +83,11 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
 
         Route::post('/contacts', [ContactController::class, 'store']);
         Route::put('/contacts/{id}', [ContactController::class, 'update']);
-        Route::delete('/contacts', [ContactController::class, 'destroy']);
+        Route::post('/contact/delete', [ContactController::class, 'destroy']);
 
 
         // Bulk operations
-        Route::delete('/contacts/bulk', [ContactController::class, 'bulkDestroy']);
+        Route::post('/contacts/bulk-delete', [ContactController::class, 'bulkDestroy']);
         Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']);
         
         // Group management routes
