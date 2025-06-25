@@ -28,7 +28,7 @@ class UnifiedRegisterRequest extends FormRequest
 
             // Do NOT require email or phone_number here!
             // Let the controller handle conditional validation.
-
+            
             // Merchant specific fields (required if user_type is merchant)
             'business_name' => 'required_if:user_type,merchant|string|max:255',
             'address' => 'required_if:user_type,merchant|string|max:255',
