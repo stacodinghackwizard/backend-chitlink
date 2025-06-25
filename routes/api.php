@@ -86,6 +86,8 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
         Route::post('/contact/delete', [ContactController::class, 'destroy']);
         Route::post('/contacts/import', [ContactController::class, 'importExcel']);
         Route::get('/contacts/download-excel', [ContactController::class, 'downloadSampleExcel']);
+        Route::post('/contacts/search', [ContactController::class, 'searchContacts']);
+        Route::post('/contact-groups/search', [ContactController::class, 'searchContactGroups']);
         // Bulk operations
         Route::post('/contacts/bulk-delete', [ContactController::class, 'bulkDestroy']);
         Route::post('/contacts/add-users', [ContactController::class, 'addUserToContacts']);
