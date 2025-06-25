@@ -110,9 +110,9 @@ class AuthController extends Controller
             }
 
             if ($user->email) {
-                $this->sendOtp($user);
+            $this->sendOtp($user);
             }
-
+           
             $responseUser = [
                 'id' => $user->id,
                 'email' => $user->email,
@@ -121,11 +121,11 @@ class AuthController extends Controller
                 'updated_at' => $user->updated_at,
                 'email_verified_at' => $user->email_verified_at,
             ];
-
+            
             if ($userType === 'user') {
                 $responseUser['user_id'] = $user->user_id;
             }
-
+            
             if ($userType === 'merchant') {
                 $responseUser['mer_id'] = $user->mer_id;
                 $responseUser['business_name'] = $user->business_name;
@@ -242,7 +242,7 @@ class AuthController extends Controller
         $user->save();
 
         if ($user->email) {
-            Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
+        Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
         } elseif ($user->phone_number) {
             $this->sendSmsOtp($user->phone_number, $verificationCode);
         }
@@ -297,11 +297,11 @@ class AuthController extends Controller
                 'message' => 'Account must be verified before submitting KYC.'
             ], 403);
         }
-
+        
         if (!$user) {
             return response()->json(['status' => 'error', 'message' => 'Unauthenticated.'], 401);
         }
-
+        
         $user->update([
             'nin' => $request->nin,
             'bvn' => $request->bvn,
@@ -430,7 +430,7 @@ class AuthController extends Controller
         if (!$user) {
             return response()->json(['message' => 'User not authenticated.'], 401);
         }
-
+     
         $user->tokens()->delete();
 
         return response()->json(['message' => ucfirst($userType) . ' logged out successfully.']);
