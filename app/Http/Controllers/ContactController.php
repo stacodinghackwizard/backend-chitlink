@@ -10,6 +10,13 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Imports\ContactsImport;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Response as FacadeResponse;
+use Illuminate\Support\Collection;
+use Maatwebsite\Excel\HeadingRowImport;
+use Illuminate\Support\Facades\Log;
 
 class ContactController extends Controller
 {
@@ -601,5 +608,71 @@ class ContactController extends Controller
         } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Group not found.'], Response::HTTP_NOT_FOUND);
         }
+    }
+
+    public function importExcel(Request $request)
+    {
+        $merchant = Auth::guard('merchant')->user();
+        if (!$merchant) {
+            return response()->json(['message' => 'Unauthorized, What are you doing bro!'], 401);
+        }
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv'
+        ]);
+
+        // Validate headers
+        $requiredHeaders = ['name', 'email', 'phone_number', 'profile_image'];
+        $headings = (new HeadingRowImport)->toArray($request->file('file'))[0][0];
+        Log::info('Excel Headings:', $headings);
+
+        $normalizedHeadings = array_map(function($header) {
+            return strtolower(trim($header));
+        }, $headings);
+
+        $missingHeaders = array_diff($requiredHeaders, $normalizedHeadings);
+        if (!empty($missingHeaders)) {
+            return response()->json([
+                'message' => 'Invalid or missing headers.',
+                'missing_headers' => $missingHeaders,
+                'received_headers' => $normalizedHeadings
+            ], 422);
+        }
+
+        $import = new ContactsImport;
+        try {
+            Excel::import($import, $request->file('file'));
+
+            $failures = $import->failures();
+            if (count($failures) > 0) {
+                return response()->json([
+                    'message' => 'Some rows failed to import.',
+                    'failures' => $failures
+                ], 422);
+            }
+
+            return response()->json(['message' => 'Contacts imported successfully.']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Import failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Download a sample Excel file for contact import
+     */
+    public function downloadSampleExcel()
+    {
+        $merchant = Auth::guard('merchant')->user();
+        if (!$merchant) {
+            return response()->json(['message' => 'Unauthorized, What are you doing bro!'], 401);
+        }
+
+        $sampleData = [
+            ['name' => 'John Doe', 'email' => 'john@example.com', 'phone_number' => '08012345678', 'profile_image' => 'https://example.com/images/john.jpg'],
+            ['name' => 'Jane Smith', 'email' => 'jane@example.com', 'phone_number' => '08087654321', 'profile_image' => 'https://example.com/images/jane.png'],
+        ];
+
+        $fileName = 'sample_contacts_import.xlsx';
+        return Excel::download(new \App\Exports\SampleContactsExport($sampleData), $fileName);
     }
 }
