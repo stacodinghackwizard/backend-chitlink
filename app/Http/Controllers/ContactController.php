@@ -675,4 +675,70 @@ class ContactController extends Controller
         $fileName = 'sample_contacts_import.xlsx';
         return Excel::download(new \App\Exports\SampleContactsExport($sampleData), $fileName);
     }
+
+    /**
+     * Search contacts by name or email
+     */
+    public function searchContacts(Request $request)
+    {
+        $merchant = Auth::guard('merchant')->user();
+        if (!$merchant) {
+            return response()->json(['message' => 'Unauthorized, What are you doing bro!'], 401);
+        }
+
+        $request->validate([
+            'query' => 'required|string|min:1',
+        ]);
+
+        $query = $request->input('query');
+        $contacts = Contact::where('merchant_id', $merchant->id)
+            ->where(function($q) use ($query) {
+                $q->where('name', 'like', "%$query%")
+                  ->orWhere('email', 'like', "%$query%")
+                  ;
+            })
+            ->get();
+
+        if ($contacts->isEmpty()) {
+            return response()->json([
+                'message' => 'No record found.',
+                'data' => $contacts
+            ], 404);
+        }
+        return response()->json([
+            'message' => 'Records found.',
+            'data' => $contacts
+        ]);
+    }
+
+    /**
+     * Search contact groups by name
+     */
+    public function searchContactGroups(Request $request)
+    {
+        $merchant = Auth::guard('merchant')->user();
+        if (!$merchant) {
+            return response()->json(['message' => 'Unauthorized, What are you doing bro!'], 401);
+        }
+
+        $request->validate([
+            'query' => 'required|string|min:1',
+        ]);
+
+        $query = $request->input('query');
+        $groups = ContactGroup::where('merchant_id', $merchant->id)
+            ->where('name', 'like', "%$query%")
+            ->get();
+
+        if ($groups->isEmpty()) {
+            return response()->json([
+                'message' => 'No record found.',
+                'data' => $groups
+            ], 404);
+        }
+        return response()->json([
+            'message' => 'Records found.',
+            'data' => $groups
+        ]);
+    }
 }
