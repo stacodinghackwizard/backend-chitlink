@@ -135,11 +135,17 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
         Route::post('/logout','logout');
     });
 
+    // Thrift Package Invite & Application Endpoints
+    Route::post('/thrift-packages/{id}/invite', [\App\Http\Controllers\ThriftPackageController::class, 'inviteUser']);
+    Route::get('/users/thrift-invites', [\App\Http\Controllers\UserController::class, 'listThriftInvites']);
+    Route::post('/thrift-invites/{invite_id}/respond', [\App\Http\Controllers\ThriftPackageController::class, 'respondToInvite']);
+    Route::get('/thrift-packages/public', [\App\Http\Controllers\ThriftPackageController::class, 'listPublicPackages']);
+    Route::post('/thrift-packages/{id}/apply', [\App\Http\Controllers\ThriftPackageController::class, 'applyToPackage']);
+    Route::get('/thrift-packages/{id}/applications', [\App\Http\Controllers\ThriftPackageController::class, 'listApplications']);
+    Route::post('/thrift-applications/{application_id}/respond', [\App\Http\Controllers\ThriftPackageController::class, 'respondToApplication']);
+    Route::get('/users/thrift-applications', [\App\Http\Controllers\UserController::class, 'listThriftApplications']);
+    Route::get('/users/thrift-rejected', [\App\Http\Controllers\UserController::class, 'listRejectedPackages']);
 
-
-
-
-   
 });
 
 

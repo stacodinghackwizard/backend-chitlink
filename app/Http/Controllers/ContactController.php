@@ -81,6 +81,8 @@ class ContactController extends Controller
 
         // Get filter parameter (contacts, users, or all)
         $filter = $request->get('filter', 'all'); // Default to 'all'
+        $perPage = 10;
+        $page = $request->get('page', 1);
 
         $combinedData = collect();
         $sequentialId = 1;
@@ -153,10 +155,17 @@ class ContactController extends Controller
             }
         }
 
+        $paginated = $combinedData->forPage($page, $perPage)->values();
+        $total = $combinedData->count();
+        $lastPage = (int) ceil($total / $perPage);
+
         return response()->json([
-            'data' => $combinedData->values(),
+            'data' => $paginated,
             'filter' => $filter,
-            'total' => $combinedData->count()
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => (int) $page,
+            'last_page' => $lastPage
         ]);
     }
 
@@ -358,17 +367,21 @@ class ContactController extends Controller
             return response()->json(['message' => 'Unauthorized, What are you doing bro!'], Response::HTTP_UNAUTHORIZED);
         }
 
+        $perPage = 10;
         $groups = ContactGroup::where('merchant_id', $merchant->id)
                              ->withCount('contacts')
                              ->with(['contacts' => function($query) {
                                  $query->select('contacts.id', 'name', 'email', 'phone_number', 'profile_image');
                              }])
                              ->orderBy('created_at', 'desc')
-                             ->get();
+                             ->paginate($perPage);
 
         return response()->json([
-            'data' => $groups,
-            'total' => $groups->count()
+            'data' => $groups->items(),
+            'total' => $groups->total(),
+            'per_page' => $groups->perPage(),
+            'current_page' => $groups->currentPage(),
+            'last_page' => $groups->lastPage()
         ]);
     }
 

@@ -48,6 +48,16 @@ class ThriftPackage extends Model
         return $this->belongsToMany(User::class, 'thrift_admins');
     }
 
+    public function invites()
+    {
+        return $this->hasMany(ThriftPackageInvite::class);
+    }
+
+    public function applications()
+    {
+        return $this->hasMany(ThriftPackageApplication::class);
+    }
+
     public function getProfileImageUrlAttribute()
     {
         if ($this->profile_image) {

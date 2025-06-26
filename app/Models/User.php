@@ -96,4 +96,14 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->belongsToMany(ThriftPackage::class, 'thrift_admins');
     }
+
+    public function thriftInvites()
+    {
+        return $this->hasMany(ThriftPackageInvite::class, 'invited_user_id');
+    }
+
+    public function thriftApplications()
+    {
+        return $this->hasMany(ThriftPackageApplication::class);
+    }
 }
