@@ -10,6 +10,13 @@ use App\Models\ThriftSlot;
 use App\Models\ThriftTransaction;
 use App\Models\Contact;
 use Illuminate\Validation\Rule;
+use App\Models\ThriftPackageInvite;
+use App\Models\ThriftPackageApplication;
+use App\Notifications\ThriftPackageInviteNotification;
+use App\Notifications\ThriftPackageApplicationNotification;
+use App\Models\User;
+use App\Models\Merchant;
+use Illuminate\Support\Carbon;
 
 class ThriftPackageController extends Controller
 {
@@ -72,19 +79,17 @@ class ThriftPackageController extends Controller
             $validated['merchant_id'] = $merchant->id;
             $validated['created_by_type'] = 'merchant';
             $validated['created_by_id'] = $merchant->id;
+            $package = ThriftPackage::create($validated);
+            // Do NOT add merchant as admin
         } elseif ($user) {
             $validated['merchant_id'] = null; // Explicitly set to null for user
             $validated['created_by_type'] = 'user';
             $validated['created_by_id'] = $user->id;
+            $package = ThriftPackage::create($validated);
+            // Only add as admin if user (not merchant)
+            $package->admins()->syncWithoutDetaching([$user->id]);
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
-        }
-
-        $package = ThriftPackage::create($validated);
-
-        // Only add as admin if user (not merchant)
-        if ($user) {
-            $package->admins()->syncWithoutDetaching([$user->id]);
         }
 
         return response()->json($package, 201);
@@ -120,7 +125,10 @@ class ThriftPackageController extends Controller
         $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
         if ($merchant) {
-            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->firstOrFail();
+            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->first();
+            if (!$package) {
+                return response()->json(['message' => 'You do not have permission to update this package.'], 403);
+            }
         } elseif ($user) {
             $package = ThriftPackage::where('id', $id)
                 ->where(function($q) use ($user) {
@@ -130,7 +138,10 @@ class ThriftPackageController extends Controller
                         $q3->where('users.id', $user->id);
                     });
                 })
-                ->firstOrFail();
+                ->first();
+            if (!$package) {
+                return response()->json(['message' => 'You do not have permission to update this package.'], 403);
+            }
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -503,5 +514,146 @@ class ThriftPackageController extends Controller
             'message' => 'User added as admin to this thrift package.',
             'admin_user_id' => $newAdmin->id,
         ]);
+    }
+
+    /**
+     * Invite a user to a thrift package (merchant or admin only)
+     */
+    public function inviteUser(Request $request, $id)
+    {
+        $request->validate(['user_id' => 'required|exists:users,id']);
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $package = ThriftPackage::findOrFail($id);
+
+        // Only merchant owner or admin can invite
+        $isOwner = $merchant && $package->merchant_id === $merchant->id;
+        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        if (!$isOwner && !$isAdmin) {
+            return response()->json(['message' => 'Forbidden: Only the merchant or an admin can invite.'], 403);
+        }
+
+        $invite = ThriftPackageInvite::firstOrCreate([
+            'thrift_package_id' => $package->id,
+            'invited_user_id' => $request->user_id,
+        ], [
+            'invited_by_id' => $isOwner ? $merchant->id : $user->id,
+            'status' => 'pending',
+        ]);
+
+        // Notify the user
+        $invitee = User::find($request->user_id);
+        $invitee->notify(new ThriftPackageInviteNotification($invite));
+
+        return response()->json(['message' => 'User invited successfully.', 'invite' => $invite]);
+    }
+
+    /**
+     * User responds to an invite (accept/reject)
+     */
+    public function respondToInvite(Request $request, $invite_id)
+    {
+        $request->validate(['status' => 'required|in:accepted,rejected']);
+        $user = Auth::user();
+        $invite = ThriftPackageInvite::findOrFail($invite_id);
+        if ($invite->invited_user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden: Not your invite.'], 403);
+        }
+        $invite->status = $request->status;
+        $invite->responded_at = now();
+        $invite->save();
+        if ($request->status === 'accepted') {
+            // Add as contributor if not already
+            \App\Models\ThriftContributor::firstOrCreate([
+                'thrift_package_id' => $invite->thrift_package_id,
+                'user_id' => $user->id,
+            ]);
+        }
+        return response()->json(['message' => 'Invite response recorded.', 'invite' => $invite]);
+    }
+
+    /**
+     * List all public thrift packages (for users to apply)
+     */
+    public function listPublicPackages(Request $request)
+    {
+        $packages = ThriftPackage::where('status', 'public')->with('merchant')->get();
+        return response()->json(['packages' => $packages]);
+    }
+
+    /**
+     * User applies to join a thrift package
+     */
+    public function applyToPackage(Request $request, $id)
+    {
+        $user = Auth::user();
+        $package = ThriftPackage::findOrFail($id);
+        // Only allow if not already a contributor or invited
+        $alreadyContributor = $package->contributors()->where('user_id', $user->id)->exists();
+        $alreadyInvited = $package->invites()->where('invited_user_id', $user->id)->where('status', 'pending')->exists();
+        $alreadyApplied = $package->applications()->where('user_id', $user->id)->where('status', 'pending')->exists();
+        if ($alreadyContributor || $alreadyInvited || $alreadyApplied) {
+            return response()->json(['message' => 'You have already joined, been invited, or applied.'], 409);
+        }
+        $application = ThriftPackageApplication::create([
+            'thrift_package_id' => $package->id,
+            'user_id' => $user->id,
+            'status' => 'pending',
+        ]);
+        // Notify merchant/admin
+        if ($package->merchant_id) {
+            $merchant = Merchant::find($package->merchant_id);
+            if ($merchant) $merchant->notify(new ThriftPackageApplicationNotification($application));
+        }
+        foreach ($package->admins as $admin) {
+            $admin->notify(new ThriftPackageApplicationNotification($application));
+        }
+        return response()->json(['message' => 'Application submitted.', 'application' => $application]);
+    }
+
+    /**
+     * List all applications for a package (merchant/admin only)
+     */
+    public function listApplications($id)
+    {
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $package = ThriftPackage::findOrFail($id);
+        $isOwner = $merchant && $package->merchant_id === $merchant->id;
+        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        if (!$isOwner && !$isAdmin) {
+            return response()->json(['message' => 'Forbidden: Only the merchant or an admin can view applications.'], 403);
+        }
+        $applications = $package->applications()->with('user')->get();
+        return response()->json(['applications' => $applications]);
+    }
+
+    /**
+     * Merchant/admin responds to an application (accept/reject)
+     */
+    public function respondToApplication(Request $request, $application_id)
+    {
+        $request->validate(['status' => 'required|in:accepted,rejected']);
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $application = ThriftPackageApplication::findOrFail($application_id);
+        $package = $application->thriftPackage;
+        $isOwner = $merchant && $package->merchant_id === $merchant->id;
+        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        if (!$isOwner && !$isAdmin) {
+            return response()->json(['message' => 'Forbidden: Only the merchant or an admin can respond.'], 403);
+        }
+        $application->status = $request->status;
+        $application->responded_at = now();
+        $application->save();
+        if ($request->status === 'accepted') {
+            \App\Models\ThriftContributor::firstOrCreate([
+                'thrift_package_id' => $package->id,
+                'user_id' => $application->user_id,
+            ]);
+        }
+        // Notify user
+        $application->user->notify(new ThriftPackageApplicationNotification($application));
+        return response()->json(['message' => 'Application response recorded.', 'application' => $application]);
     }
 } 
