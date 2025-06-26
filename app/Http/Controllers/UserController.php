@@ -163,4 +163,38 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * List all thrift package invites for the authenticated user
+     */
+    public function listThriftInvites(Request $request)
+    {
+        $user = Auth::user();
+        $invites = $user->thriftInvites()->with('thriftPackage')->orderByDesc('created_at')->get();
+        return response()->json(['invites' => $invites]);
+    }
+
+    /**
+     * List all thrift package applications for the authenticated user
+     */
+    public function listThriftApplications(Request $request)
+    {
+        $user = Auth::user();
+        $applications = $user->thriftApplications()->with('thriftPackage')->orderByDesc('created_at')->get();
+        return response()->json(['applications' => $applications]);
+    }
+
+    /**
+     * List all rejected thrift packages for the authenticated user (from invites and applications)
+     */
+    public function listRejectedPackages(Request $request)
+    {
+        $user = Auth::user();
+        $rejectedInvites = $user->thriftInvites()->where('status', 'rejected')->with('thriftPackage')->get();
+        $rejectedApplications = $user->thriftApplications()->where('status', 'rejected')->with('thriftPackage')->get();
+        return response()->json([
+            'rejected_invites' => $rejectedInvites,
+            'rejected_applications' => $rejectedApplications
+        ]);
+    }
 }
