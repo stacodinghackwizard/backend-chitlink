@@ -53,10 +53,12 @@ class UserController extends Controller
             return response()->json(['message' => 'Merchants cannot access user details.'], 403);
         }
 
-      
+        $userArr = $user->toArray();
+        unset($userArr['id']);
+
         return response()->json([
             'message' => 'User profile retrieved successfully.',
-            'user' => $user,
+            'user' => $userArr,
         ], 200);
 
        

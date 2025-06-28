@@ -33,6 +33,29 @@ class ThriftPackageController extends Controller
 
         if ($merchant) {
             $packages = ThriftPackage::where('merchant_id', $merchant->id)->get();
+            // Prepare merchant details
+            $merchantDetails = [
+                'id' => $merchant->id,
+                'mer_id' => $merchant->mer_id,
+                'created_at' => $merchant->created_at,
+                'updated_at' => $merchant->updated_at,
+                'name' => $merchant->name,
+                'business_name' => $merchant->business_name,
+                'email' => $merchant->email,
+                'phone_number' => $merchant->phone_number,
+                'profile_image' => $merchant->profile_image,
+            ];
+            // Prepare packages array (remove embedded merchant object)
+            $packagesArr = $packages->map(function($package) use ($merchant) {
+                $arr = $package->toArray();
+                $arr['merchant_id'] = $merchant->mer_id;
+                unset($arr['merchant']);
+                return $arr;
+            });
+            return response()->json([
+                'merchant' => $merchantDetails,
+                'packages' => $packagesArr,
+            ]);
         } elseif ($user) {
             $packages = ThriftPackage::where(function($q) use ($user) {
                 $q->where(function($q2) use ($user) {
@@ -41,10 +64,29 @@ class ThriftPackageController extends Controller
                     $q3->where('users.id', $user->id);
                 });
             })->get();
+            // Map merchant_id to mer_id in the response
+            $packages = $packages->map(function($package) {
+                $arr = $package->toArray();
+                if ($package->merchant && isset($package->merchant->mer_id)) {
+                    $arr['merchant_id'] = $package->merchant->mer_id;
+                    $arr['merchant'] = [
+                        'id' => $package->merchant->id,
+                        'mer_id' => $package->merchant->mer_id,
+                        'created_at' => $package->merchant->created_at,
+                        'updated_at' => $package->merchant->updated_at,
+                        'name' => $package->merchant->name,
+                        'business_name' => $package->merchant->business_name,
+                        'email' => $package->merchant->email,
+                        'phone_number' => $package->merchant->phone_number,
+                        'profile_image' => $package->merchant->profile_image,
+                    ];
+                }
+                return $arr;
+            });
+            return response()->json($packages);
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
-        return response()->json($packages);
     }
 
     // Create thrift package (step 1)
@@ -91,32 +133,89 @@ class ThriftPackageController extends Controller
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
-
-        return response()->json($package, 201);
+        $arr = $package->toArray();
+        if ($package->merchant && isset($package->merchant->mer_id)) {
+            $arr['merchant_id'] = $package->merchant->mer_id;
+        }
+        return response()->json($arr, 201);
     }
 
     // Show thrift package details
     public function show($id)
     {
-        $user = Auth::user();
-        $merchant = Auth::guard('merchant')->user();
-        if ($merchant) {
-            $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->with(['contributors.contact', 'slots', 'transactions'])->firstOrFail();
-        } elseif ($user) {
-            $package = ThriftPackage::where('id', $id)
-                ->where(function($q) use ($user) {
-                    $q->where(function($q2) use ($user) {
-                        $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
-                    })->orWhereHas('admins', function($q3) use ($user) {
-                        $q3->where('users.id', $user->id);
-                    });
-                })
-                ->with(['contributors.contact', 'slots', 'transactions'])
-                ->firstOrFail();
-        } else {
-            return response()->json(['message' => 'Unauthorized'], 401);
+        try {
+            $user = Auth::user();
+            $merchant = Auth::guard('merchant')->user();
+            if ($merchant) {
+                $package = ThriftPackage::where('id', $id)->where('merchant_id', $merchant->id)->with(['contributors.contact', 'slots', 'transactions', 'merchant'])->firstOrFail();
+            } elseif ($user) {
+                $package = ThriftPackage::where('id', $id)
+                    ->where(function($q) use ($user) {
+                        $q->where(function($q2) use ($user) {
+                            $q2->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                        })->orWhereHas('admins', function($q3) use ($user) {
+                            $q3->where('users.id', $user->id);
+                        });
+                    })
+                    ->with(['contributors.contact', 'slots', 'transactions', 'merchant'])
+                    ->firstOrFail();
+            } else {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+            $arr = $package->toArray();
+            if ($package->merchant && isset($package->merchant->mer_id)) {
+                $arr['merchant_id'] = $package->merchant->mer_id;
+            
+                $arr['merchant'] = [
+                    'id' => $package->merchant->id,
+                    'mer_id' => $package->merchant->mer_id,
+                    'created_at' => $package->merchant->created_at,
+                    'updated_at' => $package->merchant->updated_at,
+                    'name' => $package->merchant->name,
+                    'business_name' => $package->merchant->business_name,
+                    'email' => $package->merchant->email,
+                    'phone_number' => $package->merchant->phone_number,
+                    'profile_image' => $package->merchant->profile_image,
+                ];
+            }
+
+            // Map contributors by their id for quick lookup
+            $contributorMap = [];
+            if (isset($arr['contributors'])) {
+                foreach ($arr['contributors'] as $contributor) {
+                    $contributorMap[$contributor['id']] = $contributor;
+                }
+            }
+            // Adjust slots to include user_id/contact_id
+            if (isset($arr['slots'])) {
+                foreach ($arr['slots'] as &$slot) {
+                    $contributorId = $slot['contributor_id'];
+                    if (isset($contributorMap[$contributorId])) {
+                        $contributor = $contributorMap[$contributorId];
+                        if (!empty($contributor['user_id'])) {
+                            $slot['user_id'] = $contributor['user_id'];
+                        }
+                        if (!empty($contributor['contact_id'])) {
+                            $slot['contact_id'] = $contributor['contact_id'];
+                        }
+                    }
+                }
+                unset($slot); // break reference
+            }
+            // Remove merchant_id from contact in contributors
+            if (isset($arr['contributors'])) {
+                foreach ($arr['contributors'] as &$contributor) {
+                    if (isset($contributor['contact']) && is_array($contributor['contact'])) {
+                        unset($contributor['contact']['merchant_id']);
+                    }
+                }
+                unset($contributor); // break reference
+            }
+
+            return response()->json($arr);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['message' => 'Thrift package not found.'], 404);
         }
-        return response()->json($package);
     }
 
     // Update T&C
@@ -229,7 +328,7 @@ class ThriftPackageController extends Controller
         $publicUser = function ($user) {
             if (!$user) return null;
             return [
-                'id' => $user->id,
+                'user_id' => $user->user_id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone_number' => $user->phone_number,
@@ -239,7 +338,7 @@ class ThriftPackageController extends Controller
         $publicContact = function ($contact) {
             if (!$contact) return null;
             return [
-                'id' => $contact->id,
+                'user_id' => $contact->user_id,
                 'name' => $contact->name,
                 'email' => $contact->email,
                 'phone_number' => $contact->phone_number,
@@ -248,17 +347,11 @@ class ThriftPackageController extends Controller
         };
         // Transform the response to always show user_id/contact_id and user/contact public details
         $contributors = collect($added)->map(function ($contributor) use ($publicUser, $publicContact) {
-            return [
-                'id' => $contributor->id,
-                'thrift_package_id' => $contributor->thrift_package_id,
-                'user_id' => $contributor->user_id,
-                'contact_id' => $contributor->contact_id,
-                'status' => $contributor->status,
-                'created_at' => $contributor->created_at,
-                'updated_at' => $contributor->updated_at,
-                'user' => $publicUser($contributor->user),
-                'contact' => $publicContact($contributor->contact),
-            ];
+            $arr = $contributor->toArray();
+            // user_id and merchant_id already handled in toArray
+            $arr['user'] = $publicUser($contributor->user);
+            $arr['contact'] = $publicContact($contributor->contact);
+            return $arr;
         });
         $response = [
             'message' => 'Contributors added successfully.',
@@ -299,7 +392,7 @@ class ThriftPackageController extends Controller
         $publicUser = function ($user) {
             if (!$user) return null;
             return [
-                'id' => $user->id,
+                'user_id' => $user->user_id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone_number' => $user->phone_number,
@@ -309,7 +402,7 @@ class ThriftPackageController extends Controller
         $publicContact = function ($contact) {
             if (!$contact) return null;
             return [
-                'id' => $contact->id,
+                'user_id' => $contact->user_id,
                 'name' => $contact->name,
                 'email' => $contact->email,
                 'phone_number' => $contact->phone_number,
@@ -317,17 +410,11 @@ class ThriftPackageController extends Controller
             ];
         };
         $contributors = $contributors->map(function ($contributor) use ($publicUser, $publicContact) {
-            return [
-                'id' => $contributor->id,
-                'thrift_package_id' => $contributor->thrift_package_id,
-                'user_id' => $contributor->user_id,
-                'contact_id' => $contributor->contact_id,
-                'status' => $contributor->status,
-                'created_at' => $contributor->created_at,
-                'updated_at' => $contributor->updated_at,
-                'user' => $publicUser($contributor->user),
-                'contact' => $publicContact($contributor->contact),
-            ];
+            $arr = $contributor->toArray();
+            // user_id and merchant_id already handled in toArray
+            $arr['user'] = $publicUser($contributor->user);
+            $arr['contact'] = $publicContact($contributor->contact);
+            return $arr;
         });
         return response()->json(['contributors' => $contributors]);
     }
@@ -512,7 +599,7 @@ class ThriftPackageController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'User added as admin to this thrift package.',
-            'admin_user_id' => $newAdmin->id,
+            'admin_user_id' => $newAdmin->user_id,
         ]);
     }
 
@@ -569,7 +656,11 @@ class ThriftPackageController extends Controller
                 'user_id' => $user->id,
             ]);
         }
-        return response()->json(['message' => 'Invite response recorded.', 'invite' => $invite]);
+        $inviteArr = $invite->toArray();
+        if ($invite->invitedUser) {
+            $inviteArr['user_id'] = $invite->invitedUser->user_id;
+        }
+        return response()->json(['message' => 'Invite response recorded.', 'invite' => $inviteArr]);
     }
 
     /**
@@ -578,6 +669,25 @@ class ThriftPackageController extends Controller
     public function listPublicPackages(Request $request)
     {
         $packages = ThriftPackage::where('status', 'public')->with('merchant')->get();
+        $packages = $packages->map(function($package) {
+            $arr = $package->toArray();
+            if ($package->merchant && isset($package->merchant->mer_id)) {
+                $arr['merchant_id'] = $package->merchant->mer_id;
+            
+                $arr['merchant'] = [
+                    'id' => $package->merchant->id,
+                    'mer_id' => $package->merchant->mer_id,
+                    'created_at' => $package->merchant->created_at,
+                    'updated_at' => $package->merchant->updated_at,
+                    'name' => $package->merchant->name,
+                    'business_name' => $package->merchant->business_name,
+                    'email' => $package->merchant->email,
+                    'phone_number' => $package->merchant->phone_number,
+                    'profile_image' => $package->merchant->profile_image,
+                ];
+            }
+            return $arr;
+        });
         return response()->json(['packages' => $packages]);
     }
 
@@ -624,7 +734,13 @@ class ThriftPackageController extends Controller
         if (!$isOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an admin can view applications.'], 403);
         }
-        $applications = $package->applications()->with('user')->get();
+        $applications = $package->applications()->with('user')->get()->map(function($application) {
+            $arr = $application->toArray();
+            if ($application->user) {
+                $arr['user_id'] = $application->user->user_id;
+            }
+            return $arr;
+        });
         return response()->json(['applications' => $applications]);
     }
 

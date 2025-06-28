@@ -41,6 +41,7 @@ class ThriftPackageApplicationNotification extends Notification implements Shoul
             'thrift_package_id' => $this->application->thrift_package_id,
             'package_name' => $this->application->thriftPackage->name,
             'status' => $this->application->status,
+            'user_id' => $this->application->user ? $this->application->user->user_id : null,
         ];
     }
 } 
