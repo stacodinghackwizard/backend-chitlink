@@ -82,7 +82,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $userId;
     }
 
-    protected $appends = ['profile_image_url'];
+    protected $appends = ['profile_image_url', 'user_id'];
 
     public function getProfileImageUrlAttribute()
     {
@@ -105,5 +105,10 @@ class User extends Authenticatable implements MustVerifyEmail
     public function thriftApplications()
     {
         return $this->hasMany(ThriftPackageApplication::class);
+    }
+
+    public function getUserIdAttribute()
+    {
+        return $this->attributes['user_id'] ?? null;
     }
 }
