@@ -41,6 +41,8 @@ class ThriftPackageInviteNotification extends Notification implements ShouldQueu
             'thrift_package_id' => $this->invite->thrift_package_id,
             'package_name' => $this->invite->thriftPackage->name,
             'status' => $this->invite->status,
+            'invited_user_id' => $this->invite->invitedUser ? $this->invite->invitedUser->user_id : null,
+            'invited_by_user_id' => $this->invite->invitedBy ? $this->invite->invitedBy->user_id : null,
         ];
     }
 } 

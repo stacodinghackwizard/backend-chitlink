@@ -42,7 +42,6 @@ class ContactController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
         ]);
 
-
         $profileImagePath = null;
         if ($request->hasFile('profile_image')) {
             $profileImagePath = $request->file('profile_image')->store('contact_images');
@@ -68,7 +67,10 @@ class ContactController extends Controller
             ]);
         }
 
-        return response()->json(['message' => 'Contact created successfully.', 'contact' => $contact], 201);
+        $contactArr = $contact->toArray();
+        $contactArr['merchant_id'] = $merchant->mer_id;
+
+        return response()->json(['message' => 'Contact created successfully.', 'contact' => $contactArr], 201);
     }
 
     // Get all contacts and users in a single endpoint with filtering options
@@ -97,12 +99,13 @@ class ContactController extends Controller
             $contacts = Contact::where('merchant_id', $merchant->id)
                               ->with('groups:id,name,color')
                               ->orderBy('created_at', 'asc')
-                              ->get(['id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+                              ->get(['id', 'merchant_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
 
             foreach ($contacts as $contact) {
                 $combinedData->push([
                     'id' => $sequentialId,
-                    'original_id' => $contact->id,
+                    'contact_id' => $contact->id,
+                    'merchant_id' => $contact->merchant ? $contact->merchant->mer_id : null,
                     'name' => $contact->name,
                     'email' => $contact->email,
                     'phone_number' => $contact->phone_number,
@@ -127,7 +130,7 @@ class ContactController extends Controller
         // Add users if requested
         if ($filter === 'all' || $filter === 'users') {
             $users = User::orderBy('created_at', 'asc')
-                        ->get(['id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+                        ->get(['id', 'user_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
 
             foreach ($users as $user) {
                 // Skip users that are already in contacts when showing 'all'
@@ -139,7 +142,7 @@ class ContactController extends Controller
 
                 $combinedData->push([
                     'id' => $sequentialId,
-                    'original_id' => $user->id,
+                    'user_id' => $user->user_id,
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone_number' => $user->phone_number,
@@ -236,7 +239,10 @@ class ContactController extends Controller
 
             $contact->update($request->only('name', 'email', 'phone_number'));
 
-            return response()->json(['message' => 'Contact updated successfully.', 'contact' => $contact]);
+            $contactArr = $contact->toArray();
+            $contactArr['merchant_id'] = $merchant->mer_id;
+
+            return response()->json(['message' => 'Contact updated successfully.', 'contact' => $contactArr]);
         } catch (ModelNotFoundException $e) {
             return response()->json(['message' => 'Contact not found or unauthorized.'], Response::HTTP_NOT_FOUND);
         }
@@ -376,8 +382,17 @@ class ContactController extends Controller
                              ->orderBy('created_at', 'desc')
                              ->paginate($perPage);
 
+        // Map merchant_id to mer_id for each group
+        $groupsData = collect($groups->items())->map(function($group) {
+            $groupArr = $group->toArray();
+            if (isset($group->merchant) && isset($group->merchant->mer_id)) {
+                $groupArr['merchant_id'] = $group->merchant->mer_id;
+            }
+            return $groupArr;
+        });
+
         return response()->json([
-            'data' => $groups->items(),
+            'data' => $groupsData,
             'total' => $groups->total(),
             'per_page' => $groups->perPage(),
             'current_page' => $groups->currentPage(),
@@ -440,9 +455,12 @@ class ContactController extends Controller
             $group->load(['contacts:id,name,email,phone_number,profile_image']);
             $group->loadCount('contacts');
 
+            $groupArr = $group->toArray();
+            $groupArr['merchant_id'] = $merchant->mer_id;
+
             return response()->json([
                 'message' => 'Group created successfully.',
-                'group' => $group
+                'group' => $groupArr
             ], 201);
 
         } catch (\Exception $e) {
@@ -482,9 +500,12 @@ class ContactController extends Controller
 
             $group->update($request->only('name', 'description', 'color'));
 
+            $groupArr = $group->toArray();
+            $groupArr['merchant_id'] = $merchant->mer_id;
+
             return response()->json([
                 'message' => 'Group updated successfully.',
-                'group' => $group
+                'group' => $groupArr
             ]);
 
         } catch (ModelNotFoundException $e) {
@@ -612,10 +633,21 @@ class ContactController extends Controller
                                 }])
                                 ->firstOrFail();
 
+            $groupArr = $group->toArray();
+            $groupArr['merchant_id'] = $merchant->mer_id;
+
+            // Add contact_id or user_id to each contact in the response
+            $contacts = $group->contacts->map(function($contact) {
+                $contactArr = $contact->toArray();
+                $contactArr['contact_id'] = $contact->id;
+                // If you ever support user contacts, add user_id here as well
+                return $contactArr;
+            });
+
             return response()->json([
-                'group' => $group,
-                'contacts' => $group->contacts,
-                'total' => $group->contacts->count()
+                'group' => $groupArr,
+                'contacts' => $contacts,
+                'total' => $contacts->count()
             ]);
 
         } catch (ModelNotFoundException $e) {
@@ -743,15 +775,21 @@ class ContactController extends Controller
             ->where('name', 'like', "%$query%")
             ->get();
 
+        $groupsData = $groups->map(function($group) use ($merchant) {
+            $groupArr = $group->toArray();
+            $groupArr['merchant_id'] = $merchant->mer_id;
+            return $groupArr;
+        });
+
         if ($groups->isEmpty()) {
             return response()->json([
                 'message' => 'No record found.',
-                'data' => $groups
+                'data' => $groupsData
             ], 404);
         }
         return response()->json([
             'message' => 'Records found.',
-            'data' => $groups
+            'data' => $groupsData
         ]);
     }
 }

@@ -48,4 +48,22 @@ class ThriftContributor extends Model
         }
         return null;
     }
+
+    public function toArray()
+    {
+        $array = parent::toArray();
+        if ($this->user && (property_exists($this->user, 'user_id') || array_key_exists('user_id', $this->user->getAttributes()))) {
+            $array['user_id'] = $this->user->user_id;
+            if (isset($array['user']) && is_array($array['user']) && array_key_exists('id', $array['user'])) {
+                unset($array['user']['id']);
+            }
+        }
+        if ($this->contact) {
+            $array['contact_id'] = $this->contact->id;
+        }
+        if ($this->thriftPackage && $this->thriftPackage->merchant && isset($this->thriftPackage->merchant->mer_id)) {
+            $array['merchant_id'] = $this->thriftPackage->merchant->mer_id;
+        }
+        return $array;
+    }
 } 
