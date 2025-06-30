@@ -608,7 +608,8 @@ class ThriftPackageController extends Controller
      */
     public function inviteUser(Request $request, $id)
     {
-        $request->validate(['user_id' => 'required|exists:users,id']);
+        // Validate user_id as a string that exists in users.user_id
+        $request->validate(['user_id' => 'required|exists:users,user_id']);
         $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
         $package = ThriftPackage::findOrFail($id);
@@ -620,16 +621,18 @@ class ThriftPackageController extends Controller
             return response()->json(['message' => 'Forbidden: Only the merchant or an admin can invite.'], 403);
         }
 
+        // Find the user by user_id (custom string)
+        $invitee = User::where('user_id', $request->user_id)->firstOrFail();
+
         $invite = ThriftPackageInvite::firstOrCreate([
             'thrift_package_id' => $package->id,
-            'invited_user_id' => $request->user_id,
+            'invited_user_id' => $invitee->id,
         ], [
-            'invited_by_id' => $isOwner ? $merchant->id : $user->id,
+            'invited_by_id' => $isOwner ? null : $user->id,
             'status' => 'pending',
         ]);
 
         // Notify the user
-        $invitee = User::find($request->user_id);
         $invitee->notify(new ThriftPackageInviteNotification($invite));
 
         return response()->json(['message' => 'User invited successfully.', 'invite' => $invite]);
@@ -642,7 +645,10 @@ class ThriftPackageController extends Controller
     {
         $request->validate(['status' => 'required|in:accepted,rejected']);
         $user = Auth::user();
-        $invite = ThriftPackageInvite::findOrFail($invite_id);
+        $invite = ThriftPackageInvite::find($invite_id);
+        if (!$invite) {
+            return response()->json(['message' => 'Invite not found.'], 404);
+        }
         if ($invite->invited_user_id !== $user->id) {
             return response()->json(['message' => 'Forbidden: Not your invite.'], 403);
         }
