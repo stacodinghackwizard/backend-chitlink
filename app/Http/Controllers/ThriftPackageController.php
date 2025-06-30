@@ -624,11 +624,21 @@ class ThriftPackageController extends Controller
         // Find the user by user_id (custom string)
         $invitee = User::where('user_id', $request->user_id)->firstOrFail();
 
-        $invite = ThriftPackageInvite::firstOrCreate([
+        // Remove any previous invite for this user and package
+        ThriftPackageInvite::where('thrift_package_id', $package->id)
+            ->where('invited_user_id', $invitee->id)
+            ->delete();
+
+        // Set invited_by_id to the authenticated user's id if present, otherwise to null
+        $invitedById = $user ? $user->id : null;
+        if (!$invitedById && !$isOwner) {
+            return response()->json(['message' => 'Unable to determine inviter.'], 422);
+        }
+
+        $invite = ThriftPackageInvite::create([
             'thrift_package_id' => $package->id,
             'invited_user_id' => $invitee->id,
-        ], [
-            'invited_by_id' => $isOwner ? null : $user->id,
+            'invited_by_id' => $invitedById,
             'status' => 'pending',
         ]);
 
@@ -651,6 +661,9 @@ class ThriftPackageController extends Controller
         }
         if ($invite->invited_user_id !== $user->id) {
             return response()->json(['message' => 'Forbidden: Not your invite.'], 403);
+        }
+        if ($invite->status !== 'pending') {
+            return response()->json(['message' => 'This invitation has already been responded to and is final.'], 409);
         }
         $invite->status = $request->status;
         $invite->responded_at = now();
@@ -777,5 +790,19 @@ class ThriftPackageController extends Controller
         // Notify user
         $application->user->notify(new ThriftPackageApplicationNotification($application));
         return response()->json(['message' => 'Application response recorded.', 'application' => $application]);
+    }
+
+    /**
+     * Example for get-invitation endpoint (adjust as needed for your actual method)
+     */
+    public function getUserInvites(Request $request)
+    {
+        $user = Auth::user();
+        $invites = $user->thriftInvites()->with('thriftPackage')->get()->map(function($invite) {
+            $arr = $invite->toArray();
+            unset($arr['invited_by_merchant_id']);
+            return $arr;
+        });
+        return response()->json(['invites' => $invites]);
     }
 } 

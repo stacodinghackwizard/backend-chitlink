@@ -172,7 +172,11 @@ class UserController extends Controller
     public function listThriftInvites(Request $request)
     {
         $user = Auth::user();
-        $invites = $user->thriftInvites()->with('thriftPackage')->orderByDesc('created_at')->get();
+        $invites = $user->thriftInvites()->with('thriftPackage')->orderByDesc('created_at')->get()->map(function($invite) {
+            $arr = $invite->toArray();
+            unset($arr['invited_by_merchant_id']);
+            return $arr;
+        });
         return response()->json(['invites' => $invites]);
     }
 
@@ -182,7 +186,11 @@ class UserController extends Controller
     public function listThriftApplications(Request $request)
     {
         $user = Auth::user();
-        $applications = $user->thriftApplications()->with('thriftPackage')->orderByDesc('created_at')->get();
+        $applications = $user->thriftApplications()->with('thriftPackage')->orderByDesc('created_at')->get()->map(function($application) {
+            $arr = $application->toArray();
+            unset($arr['invited_by_merchant_id']);
+            return $arr;
+        });
         return response()->json(['applications' => $applications]);
     }
 
@@ -192,8 +200,16 @@ class UserController extends Controller
     public function listRejectedPackages(Request $request)
     {
         $user = Auth::user();
-        $rejectedInvites = $user->thriftInvites()->where('status', 'rejected')->with('thriftPackage')->get();
-        $rejectedApplications = $user->thriftApplications()->where('status', 'rejected')->with('thriftPackage')->get();
+        $rejectedInvites = $user->thriftInvites()->where('status', 'rejected')->with('thriftPackage')->get()->map(function($invite) {
+            $arr = $invite->toArray();
+            unset($arr['invited_by_merchant_id']);
+            return $arr;
+        });
+        $rejectedApplications = $user->thriftApplications()->where('status', 'rejected')->with('thriftPackage')->get()->map(function($application) {
+            $arr = $application->toArray();
+            unset($arr['invited_by_merchant_id']);
+            return $arr;
+        });
         return response()->json([
             'rejected_invites' => $rejectedInvites,
             'rejected_applications' => $rejectedApplications
