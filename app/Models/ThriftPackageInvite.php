@@ -31,4 +31,9 @@ class ThriftPackageInvite extends Model
     {
         return $this->belongsTo(User::class, 'invited_by_id');
     }
+
+    public function invitedByMerchant()
+    {
+        return $this->belongsTo(Merchant::class, 'invited_by_merchant_id');
+    }
 } 
