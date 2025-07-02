@@ -114,8 +114,12 @@ class ThriftPackageController extends Controller
             'total_amount' => 'required|numeric|min:1',
             'duration_days' => 'required|integer|min:1',
             'slots' => 'required|integer|min:1',
+            'status' => 'in:public,private', // allow status to be public or private
         ];
         $validated = $request->validate($rules);
+
+        // Default to private if not provided
+        $validated['status'] = $request->input('status', 'private');
 
         if ($merchant) {
             $validated['merchant_id'] = $merchant->id;
@@ -687,12 +691,12 @@ class ThriftPackageController extends Controller
      */
     public function listPublicPackages(Request $request)
     {
-        $packages = ThriftPackage::where('status', 'public')->with('merchant')->get();
+        // Only show packages with status 'public'
+        $packages = ThriftPackage::where('status', 'public')->with(['merchant', 'admins'])->get();
         $packages = $packages->map(function($package) {
             $arr = $package->toArray();
             if ($package->merchant && isset($package->merchant->mer_id)) {
                 $arr['merchant_id'] = $package->merchant->mer_id;
-            
                 $arr['merchant'] = [
                     'id' => $package->merchant->id,
                     'mer_id' => $package->merchant->mer_id,
@@ -704,10 +708,26 @@ class ThriftPackageController extends Controller
                     'phone_number' => $package->merchant->phone_number,
                     'profile_image' => $package->merchant->profile_image,
                 ];
+            } else if ($package->created_by_type === 'user' && $package->created_by_id) {
+                $user = \App\Models\User::find($package->created_by_id);
+                if ($user) {
+                    $arr['user'] = [
+                        'id' => $user->id,
+                        'user_id' => $user->user_id,
+                        'created_at' => $user->created_at,
+                        'updated_at' => $user->updated_at,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'phone_number' => $user->phone_number,
+                        'profile_image' => $user->profile_image,
+                    ];
+                }
             }
+            unset($arr['admins']); // Remove admins from the response
             return $arr;
         });
-        return response()->json(['packages' => $packages]);
+        // Always return a 200 with an array, even if empty
+        return response()->json(['packages' => $packages], 200);
     }
 
     /**
@@ -716,7 +736,10 @@ class ThriftPackageController extends Controller
     public function applyToPackage(Request $request, $id)
     {
         $user = Auth::user();
-        $package = ThriftPackage::findOrFail($id);
+        $package = ThriftPackage::find($id);
+        if (!$package) {
+            return response()->json(['message' => 'Thrift package not found.'], 404);
+        }
         // Only allow if not already a contributor or invited
         $alreadyContributor = $package->contributors()->where('user_id', $user->id)->exists();
         $alreadyInvited = $package->invites()->where('invited_user_id', $user->id)->where('status', 'pending')->exists();
@@ -747,7 +770,10 @@ class ThriftPackageController extends Controller
     {
         $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $package = ThriftPackage::findOrFail($id);
+        $package = ThriftPackage::find($id);
+        if (!$package) {
+            return response()->json(['message' => 'Thrift package not found.'], 404);
+        }
         $isOwner = $merchant && $package->merchant_id === $merchant->id;
         $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
         if (!$isOwner && !$isAdmin) {
@@ -778,6 +804,10 @@ class ThriftPackageController extends Controller
         if (!$isOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an admin can respond.'], 403);
         }
+        // Make response final
+        if ($application->status !== 'pending') {
+            return response()->json(['message' => 'This application has already been responded to and is final.'], 409);
+        }
         $application->status = $request->status;
         $application->responded_at = now();
         $application->save();
@@ -786,6 +816,11 @@ class ThriftPackageController extends Controller
                 'thrift_package_id' => $package->id,
                 'user_id' => $application->user_id,
             ]);
+        } else if ($request->status === 'rejected') {
+            \App\Models\ThriftContributor::where([
+                'thrift_package_id' => $package->id,
+                'user_id' => $application->user_id,
+            ])->delete();
         }
         // Notify user
         $application->user->notify(new ThriftPackageApplicationNotification($application));
@@ -804,5 +839,47 @@ class ThriftPackageController extends Controller
             return $arr;
         });
         return response()->json(['invites' => $invites]);
+    }
+
+    /**
+     * Show a single public thrift package by id
+     */
+    public function showPublicPackage($id)
+    {
+        $package = ThriftPackage::where('id', $id)->where('status', 'public')->with(['merchant', 'admins'])->first();
+        if (!$package) {
+            return response()->json(['message' => 'Thrift package not found.'], 404);
+        }
+        $arr = $package->toArray();
+        if ($package->merchant && isset($package->merchant->mer_id)) {
+            $arr['merchant_id'] = $package->merchant->mer_id;
+            $arr['merchant'] = [
+                'id' => $package->merchant->id,
+                'mer_id' => $package->merchant->mer_id,
+                'created_at' => $package->merchant->created_at,
+                'updated_at' => $package->merchant->updated_at,
+                'name' => $package->merchant->name,
+                'business_name' => $package->merchant->business_name,
+                'email' => $package->merchant->email,
+                'phone_number' => $package->merchant->phone_number,
+                'profile_image' => $package->merchant->profile_image,
+            ];
+        } else if ($package->created_by_type === 'user' && $package->created_by_id) {
+            $user = \App\Models\User::find($package->created_by_id);
+            if ($user) {
+                $arr['user'] = [
+                    'id' => $user->id,
+                    'user_id' => $user->user_id,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone_number' => $user->phone_number,
+                    'profile_image' => $user->profile_image,
+                ];
+            }
+        }
+        unset($arr['admins']);
+        return response()->json($arr, 200);
     }
 } 
