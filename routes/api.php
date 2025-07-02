@@ -113,20 +113,22 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
      Route::middleware(['auth:sanctum'])
         ->prefix('thrift-packages')
         ->group(function () {
+            Route::get('/public', [\App\Http\Controllers\ThriftPackageController::class, 'listPublicPackages']);
+            Route::get('/public/{id}', [\App\Http\Controllers\ThriftPackageController::class, 'showPublicPackage']);
+            Route::get('/{id}', [\App\Http\Controllers\ThriftPackageController::class, 'show']);
             Route::get('/', [\App\Http\Controllers\ThriftPackageController::class, 'index']);
             Route::post('/', [\App\Http\Controllers\ThriftPackageController::class, 'store']);
-            Route::get('{id}', [\App\Http\Controllers\ThriftPackageController::class, 'show']);
-            Route::put('{id}/terms', [\App\Http\Controllers\ThriftPackageController::class, 'updateTerms']);
-            Route::post('{id}/contributors', [\App\Http\Controllers\ThriftPackageController::class, 'addContributors']);
-            Route::get('{id}/contributors', [\App\Http\Controllers\ThriftPackageController::class, 'getContributors']);
-            Route::post('{id}/contributors/confirm', [\App\Http\Controllers\ThriftPackageController::class, 'confirmContributors']);
-            Route::post('{id}/generate-slots', [\App\Http\Controllers\ThriftPackageController::class, 'generateSlots']);
-            Route::get('{id}/transactions', [\App\Http\Controllers\ThriftPackageController::class, 'transactions']);
-            Route::post('{id}/payout', [\App\Http\Controllers\ThriftPackageController::class, 'payout']);
-            Route::post('{id}/slots/request', [\App\Http\Controllers\ThriftPackageController::class, 'requestSlot']);
-            Route::post('{id}/slots/{slotNo}/accept', [\App\Http\Controllers\ThriftPackageController::class, 'acceptSlotRequest']);
-            Route::post('{id}/slots/{slotNo}/decline', [\App\Http\Controllers\ThriftPackageController::class, 'declineSlotRequest']);
-            Route::post('{id}/add-admin', [\App\Http\Controllers\ThriftPackageController::class, 'addAdmin']);
+            Route::put('/{id}/terms', [\App\Http\Controllers\ThriftPackageController::class, 'updateTerms']);
+            Route::post('/{id}/contributors', [\App\Http\Controllers\ThriftPackageController::class, 'addContributors']);
+            Route::get('/{id}/contributors', [\App\Http\Controllers\ThriftPackageController::class, 'getContributors']);
+            Route::post('/{id}/contributors/confirm', [\App\Http\Controllers\ThriftPackageController::class, 'confirmContributors']);
+            Route::post('/{id}/generate-slots', [\App\Http\Controllers\ThriftPackageController::class, 'generateSlots']);
+            Route::get('/{id}/transactions', [\App\Http\Controllers\ThriftPackageController::class, 'transactions']);
+            Route::post('/{id}/payout', [\App\Http\Controllers\ThriftPackageController::class, 'payout']);
+            Route::post('/{id}/slots/request', [\App\Http\Controllers\ThriftPackageController::class, 'requestSlot']);
+            Route::post('/{id}/slots/{slotNo}/accept', [\App\Http\Controllers\ThriftPackageController::class, 'acceptSlotRequest']);
+            Route::post('/{id}/slots/{slotNo}/decline', [\App\Http\Controllers\ThriftPackageController::class, 'declineSlotRequest']);
+            Route::post('/{id}/add-admin', [\App\Http\Controllers\ThriftPackageController::class, 'addAdmin']);
         });
 
     Route::controller(AuthController::class)->group(function() {
@@ -139,7 +141,7 @@ Route::middleware(['auth:sanctum',  \App\Http\Middleware\CheckKyc::class])->grou
     Route::post('/thrift-packages/{id}/invite', [\App\Http\Controllers\ThriftPackageController::class, 'inviteUser']);
     Route::get('/users/thrift-invites', [\App\Http\Controllers\UserController::class, 'listThriftInvites']);
     Route::post('/thrift-invites/{invite_id}/respond', [\App\Http\Controllers\ThriftPackageController::class, 'respondToInvite']);
-    Route::get('/thrift-packages/public', [\App\Http\Controllers\ThriftPackageController::class, 'listPublicPackages']);
+    // Route::get('/thrift-packages/public', [\App\Http\Controllers\ThriftPackageController::class, 'listPublicPackages']);
     Route::post('/thrift-packages/{id}/apply', [\App\Http\Controllers\ThriftPackageController::class, 'applyToPackage']);
     Route::get('/thrift-packages/{id}/applications', [\App\Http\Controllers\ThriftPackageController::class, 'listApplications']);
     Route::post('/thrift-applications/{application_id}/respond', [\App\Http\Controllers\ThriftPackageController::class, 'respondToApplication']);

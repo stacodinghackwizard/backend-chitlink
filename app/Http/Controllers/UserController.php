@@ -186,11 +186,11 @@ class UserController extends Controller
     public function listThriftApplications(Request $request)
     {
         $user = Auth::user();
-        $applications = $user->thriftApplications()->with('thriftPackage')->orderByDesc('created_at')->get()->map(function($application) {
-            $arr = $application->toArray();
-            unset($arr['invited_by_merchant_id']);
-            return $arr;
-        });
+        $merchant = Auth::guard('merchant')->user();
+        if ($merchant) {
+            return response()->json(['message' => 'This endpoint is only for users. Merchants cannot view thrift applications here.'], 403);
+        }
+        $applications = $user->thriftApplications()->with('thriftPackage')->orderByDesc('created_at')->get();
         return response()->json(['applications' => $applications]);
     }
 
@@ -200,6 +200,10 @@ class UserController extends Controller
     public function listRejectedPackages(Request $request)
     {
         $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        if ($merchant) {
+            return response()->json(['message' => 'This endpoint is only for users. Merchants cannot view rejected thrift packages here.'], 403);
+        }
         $rejectedInvites = $user->thriftInvites()->where('status', 'rejected')->with('thriftPackage')->get()->map(function($invite) {
             $arr = $invite->toArray();
             unset($arr['invited_by_merchant_id']);
