@@ -16,18 +16,22 @@ class VerificationMail extends Mailable
     public $merchant;
     public $code;
 
-    /**
-     * Create a new message instance.
-     */
+   /**
+	 * Create a new message instance.
+	 *
+	 * @return void
+	 */
     public function __construct($merchant, $code)
     {
         $this->merchant = $merchant;
         $this->code = $code;
     }
 
-    /**
-     * Get the message envelope.
-     */
+   /**
+	 * Get the message envelope.
+	 *
+	 * @return \Illuminate\Mail\Mailables\Envelope
+	 */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -35,9 +39,13 @@ class VerificationMail extends Mailable
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
+    
+
+     /**
+	 * Get the message content definition.
+	 *
+	 * @return \Illuminate\Mail\Mailables\Content
+	 */
     public function content(): Content
     {
         return new Content(
