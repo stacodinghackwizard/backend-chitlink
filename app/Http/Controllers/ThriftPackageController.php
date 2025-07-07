@@ -777,7 +777,7 @@ class ThriftPackageController extends Controller
         $isOwner = $merchant && $package->merchant_id === $merchant->id;
         $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
         if (!$isOwner && !$isAdmin) {
-            return response()->json(['message' => 'Forbidden: Only the merchant or an admin can view applications.'], 403);
+            return response()->json(['message' => 'Forbidden: Only the merchant or an admi can view applications.'], 403);
         }
         $applications = $package->applications()->with('user')->get()->map(function($application) {
             $arr = $application->toArray();
