@@ -96,7 +96,7 @@ class AuthController extends Controller
                     'cac_certificate' => $path,
                     'name' => $request->email ? explode('@', $request->email)[0] : $request->phone_number,
                 ];
-
+                
                 Log::info('Creating merchant with data:', $creatableData);
                 $user = Merchant::create($creatableData);
             } else { 
@@ -154,7 +154,7 @@ class AuthController extends Controller
                 'status' => 'success',
                 'message' => $message,
                 'user' => $responseUser,
-                'authorization' => $authorization, // null if not verified yet
+                'authorization' => $authorization, 
             ], 201);
 
         } catch (\Exception $e) {
