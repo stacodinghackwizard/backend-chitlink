@@ -5,7 +5,7 @@
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h1 style="color: #2d3748;">Hello, {{ $merchant->business_name }},</h1>
+        <h1 style="color: #2d3748;">Hello {{ $merchant->business_name }},</h1>
         <h2 style="color: #2d3748;">Verify Your Email Address</h2>
         <p>Thank you for signing up with Chitlink! Please use the verification code below to verify your email address:</p>
 
