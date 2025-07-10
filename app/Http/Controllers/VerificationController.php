@@ -20,9 +20,9 @@ class VerificationController extends Controller
         ]);
 
         $user = User::where('email', $request->email)->first();
-        // Generate a 4-letter alphabetic OTP (mixed case)
+        // Generate a 4-character alphanumeric OTP (mixed case)
         $otp = '';
-        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         for ($i = 0; $i < 4; $i++) {
             $otp .= $characters[random_int(0, strlen($characters) - 1)];
         }

@@ -236,15 +236,21 @@ class AuthController extends Controller
 
     private function sendOtp($user)
     {
-        $verificationCode = rand(100000, 999999);
-        $user->email_verification_code = $verificationCode;
-        $user->email_verification_code_expires_at = now()->addMinutes(10);
+        // Generate a 4-character alphanumeric code (A-Z, a-z, 0-9)
+        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $otp = '';
+        for ($i = 0; $i < 4; $i++) {
+            $otp .= $characters[random_int(0, strlen($characters) - 1)];
+        }
+        $hasUppercase = preg_match('/[A-Z]/', $otp) ? true : false;
+        $user->email_verification_code = $otp;
+        $user->email_verification_code_expires_at = now()->addMinutes(15);
         $user->save();
 
         if ($user->email) {
-        Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
+            Mail::to($user->email)->send(new VerificationMail($user, $otp, $hasUppercase));
         } elseif ($user->phone_number) {
-            $this->sendSmsOtp($user->phone_number, $verificationCode);
+            $this->sendSmsOtp($user->phone_number, $otp);
         }
     }
 
