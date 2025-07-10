@@ -15,16 +15,18 @@ class VerificationMail extends Mailable
 
     public $merchant;
     public $code;
+    public $hasUppercase;
 
    /**
 	 * Create a new message instance.
 	 *
 	 * @return void
 	 */
-    public function __construct($merchant, $code)
+    public function __construct($merchant, $code, $hasUppercase = false)
     {
         $this->merchant = $merchant;
         $this->code = $code;
+        $this->hasUppercase = $hasUppercase;
     }
 
    /**
@@ -69,6 +71,7 @@ class VerificationMail extends Mailable
                     ->view('emails.verification')
                     ->with([
                         'code' => $this->code,
+                        'hasUppercase' => $this->hasUppercase,
                     ]);
     }
 }

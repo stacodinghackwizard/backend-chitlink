@@ -20,13 +20,19 @@ class VerificationController extends Controller
         ]);
 
         $user = User::where('email', $request->email)->first();
-        $verificationCode = rand(100000, 999999);
-        $user->email_verification_code = $verificationCode;
-        $user->email_verification_code_expires_at = now()->addMinutes(10);
+        // Generate a 4-letter alphabetic OTP (mixed case)
+        $otp = '';
+        $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        for ($i = 0; $i < 4; $i++) {
+            $otp .= $characters[random_int(0, strlen($characters) - 1)];
+        }
+        $hasUppercase = preg_match('/[A-Z]/', $otp) ? true : false;
+        $user->email_verification_code = $otp;
+        $user->email_verification_code_expires_at = now()->addMinutes(15);
         $user->save();
 
-        // Send OTP via email
-        Mail::to($user->email)->send(new VerificationMail($user, $verificationCode));
+        // Send OTP via email, pass hasUppercase flag
+        Mail::to($user->email)->send(new VerificationMail($user, $otp, $hasUppercase));
 
         return response()->json(['status' => 'success', 'message' => 'Verification code sent.']);
     }

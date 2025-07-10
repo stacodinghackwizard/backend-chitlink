@@ -13,7 +13,11 @@
             <h1 style="color: #4299e1; letter-spacing: 5px; margin: 0;">{{ $code }}</h1>
         </div>
 
-        <p>This code will expire in 60 minutes.</p>
+        <p>This code will expire in 15 minutes.</p>
+
+        @if (!empty($hasUppercase))
+            <p style="color: #e53e3e; font-weight: bold;">Note: Your code contains uppercase letter(s).</p>
+        @endif
 
         <p>If you didn't create an account with Chitlink, please ignore this email.</p>
 
