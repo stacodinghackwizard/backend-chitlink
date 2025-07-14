@@ -46,7 +46,7 @@ class VerificationController extends Controller
     {
         $request->validate([
             'email' => 'required|string|email',
-            'code' => 'required|string|size:6',
+            'code' => 'required|string|size:4',
         ]);
 
         // Check if the user is a merchant
