@@ -57,8 +57,9 @@ class AuthController extends Controller
                     'regex:/^\\+?[0-9]{10,15}$/',
                 ],
                 'business_name' => 'required|string|max:255',
-                'address' => 'nullable|string',
-                'reg_number' => 'nullable|string',
+                'address' => 'required|string',
+                'reg_number' => 'required|string', // Now required
+                'cac_certificate' => 'required|file', // Now required
             ];
         } else {
             $rules = [
@@ -288,6 +289,15 @@ class AuthController extends Controller
     public function completeKyc(KycRequest $request)
     {
         $user = Auth::user(); 
+
+        // Only allow users (not merchants) to submit KYC
+        if ($user instanceof 
+            \App\Models\Merchant) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Merchants do not require KYC submission.'
+            ], 403);
+        }
 
         // Check if user is verified (email or phone)
         $isVerified = false;
