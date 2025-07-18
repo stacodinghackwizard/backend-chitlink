@@ -13,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         //
+        $middleware->alias([
+            'update.token.activity' => \App\Http\Middleware\UpdateTokenActivity::class,
+            'handle.expired.tokens' => \App\Http\Middleware\HandleExpiredTokens::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
