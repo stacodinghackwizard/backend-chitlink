@@ -144,10 +144,11 @@ class AuthController extends Controller
 
             // Only return a token if the user is already verified (for some reason)
             // $authorization = null;
-            $token = $user->createToken('KYC TOKEN', ['kyc'])->plainTextToken;
+            $token = $user->createToken('KYC TOKEN', ['kyc'], now()->addHour())->plainTextToken;
             $authorization = [
                 'token' => $token,
                 'type' => 'bearer',
+                'expires_at' => now()->addHour()->toISOString(),
             ];
            
 
@@ -195,7 +196,7 @@ class AuthController extends Controller
                 ], 403);
             }
 
-            $token = $user->createToken('API TOKEN', ['full_access'])->plainTextToken;
+            $token = $user->createToken('API TOKEN', ['full_access'], now()->addHour())->plainTextToken;
 
             // Prepare response without sensitive information
             $responseUser = [
@@ -228,6 +229,7 @@ class AuthController extends Controller
                 'authorization' => [
                     'token' => $token,
                     'type' => 'bearer',
+                    'expires_at' => now()->addHour()->toISOString(),
                 ]
             ]);
         }
@@ -450,5 +452,49 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         return response()->json(['message' => ucfirst($userType) . ' logged out successfully.']);
+    }
+
+    public function checkTokenStatus(Request $request)
+    {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthenticated.'
+            ], 401);
+        }
+
+        $token = $request->user()->currentAccessToken();
+        
+        if (!$token) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No active token found.'
+            ], 401);
+        }
+
+        $now = now();
+        $expiresAt = $token->expires_at;
+        $lastUsedAt = $token->last_used_at;
+        
+        $isExpired = $expiresAt && $now->isAfter($expiresAt);
+        $isInactive = $lastUsedAt && $now->diffInHours($lastUsedAt) >= 1;
+        
+        $remainingMinutes = $expiresAt ? $now->diffInMinutes($expiresAt, false) : null;
+        $lastActivityMinutes = $lastUsedAt ? $now->diffInMinutes($lastUsedAt) : null;
+
+        return response()->json([
+            'status' => 'success',
+            'token_status' => [
+                'is_expired' => $isExpired,
+                'is_inactive' => $isInactive,
+                'expires_at' => $expiresAt ? $expiresAt->toISOString() : null,
+                'last_used_at' => $lastUsedAt ? $lastUsedAt->toISOString() : null,
+                'remaining_minutes' => $remainingMinutes,
+                'last_activity_minutes' => $lastActivityMinutes,
+                'user_type' => $user instanceof \App\Models\Merchant ? 'merchant' : 'user',
+            ]
+        ]);
     }
 }

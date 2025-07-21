@@ -4,11 +4,17 @@ namespace App\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
+
+
 class Kernel extends HttpKernel
 {
     /**
      * The application's global HTTP middleware stack.
      */
+
+   
+
+     
     protected $middleware = [
         // \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
@@ -56,5 +62,26 @@ class Kernel extends HttpKernel
         'check.kyc' => \App\Http\Middleware\CheckKyc::class,
         'kyc' => \App\Http\Middleware\CheckKyc::class,
         'thrift.admin_or_merchant' => \App\Http\Middleware\CheckThriftAdminOrMerchant::class,
+        // 'update.token.activity' => \App\Http\Middleware\UpdateTokenActivity::class,
+        // 'handle.expired.tokens' => \App\Http\Middleware\HandleExpiredTokens::class,
     ];
+
+    /**
+     * The application's route middleware aliases.
+     *
+     * @var array<string, class-string|string>
+     */
+    // protected $middlewareAliases = [
+    //     'update.token.activity' => \App\Http\Middleware\UpdateTokenActivity::class,
+    //     'handle.expired.tokens' => \App\Http\Middleware\HandleExpiredTokens::class,
+    // ];
+
+
+      public function __construct(...$args)
+     {
+         file_put_contents(storage_path('kernel-debug.txt'), 'Kernel loaded at '.now().PHP_EOL, FILE_APPEND);
+         parent::__construct(...$args);
+     }
+
+
 }
