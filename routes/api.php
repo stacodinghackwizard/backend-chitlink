@@ -49,10 +49,11 @@ Route::middleware([EnsureFrontendRequestsAreStateful::class, 'auth:sanctum'])->g
 // KYC Route (requires authentication)
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/kyc', [AuthController::class, 'completeKyc']);
+    Route::get('/token/status', [AuthController::class, 'checkTokenStatus']);
 });
 
 // User Routes (KYC required)
-Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckKyc::class])->group(function () {
+Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activity', \App\Http\Middleware\CheckKyc::class])->group(function () {
     Route::prefix('users')->group(function () {
         Route::controller(UserController::class)->group(function() {
             Route::get('/profile', 'profile');
@@ -64,7 +65,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\CheckKyc::class])->group
 });
 
 // Merchant Routes (NO KYC required, just auth)
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activity'])->group(function () {
     Route::prefix('merchants')->group(function () {
         Route::controller(MerchantController::class)->group(function() {
             Route::get('/profile', 'profile');
@@ -73,7 +74,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         });
         // ... all other merchant routes ...
         Route::apiResource('/contacts', ContactController::class)->only(['index', 'store', 'update', 'destroy']);
-        Route::get('/contacts', [ContactController::class, 'index']);
+       
         Route::get('/contacts/users', [ContactController::class, 'getUsers']);
         Route::post('/contacts', [ContactController::class, 'store']);
         Route::put('/contacts/{id}', [ContactController::class, 'update']);
