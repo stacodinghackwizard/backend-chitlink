@@ -1005,22 +1005,43 @@ class ThriftPackageController extends Controller
         if ($contributors && is_array($contributors)) {
             // Remove all previous contributors and add new
             $package->contributors()->delete();
+            $invalidContributors = [];
             foreach ($contributors as $group) {
                 if (is_array($group) && isset($group['id'], $group['type']) && is_array($group['id'])) {
                     foreach ($group['id'] as $singleId) {
                         if ($group['type'] === 'user') {
-                            ThriftContributor::firstOrCreate([
-                                'thrift_package_id' => $package->id,
-                                'user_id' => $singleId,
-                            ]);
+                            $userModel = \App\Models\User::find($singleId);
+                            if ($userModel) {
+                                ThriftContributor::firstOrCreate([
+                                    'thrift_package_id' => $package->id,
+                                    'user_id' => $singleId,
+                                ]);
+                            } else {
+                                $invalidContributors[] = ['id' => $singleId, 'type' => 'user'];
+                            }
                         } elseif ($group['type'] === 'contact') {
-                            ThriftContributor::firstOrCreate([
-                                'thrift_package_id' => $package->id,
-                                'contact_id' => $singleId,
-                            ]);
+                            $contactModel = \App\Models\Contact::find($singleId);
+                            if ($contactModel) {
+                                ThriftContributor::firstOrCreate([
+                                    'thrift_package_id' => $package->id,
+                                    'contact_id' => $singleId,
+                                ]);
+                            } else {
+                                $invalidContributors[] = ['id' => $singleId, 'type' => 'contact'];
+                            }
                         }
                     }
                 }
+            }
+            if (!empty($invalidContributors)) {
+                // Attach info to response
+                $arr = $package->toArray();
+                if ($package->merchant && isset($package->merchant->mer_id)) {
+                    $arr['merchant_id'] = $package->merchant->mer_id;
+                }
+                $arr['is_new'] = $isNew;
+                $arr['invalid_contributors'] = $invalidContributors;
+                return response()->json($arr, 207); // 207 Multi-Status
             }
         }
 
