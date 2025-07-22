@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activi
         Route::apiResource('/contacts', ContactController::class)->only(['index', 'store', 'update', 'destroy']);
        
         Route::get('/contacts/users', [ContactController::class, 'getUsers']);
+        Route::get('/users/public', [ContactController::class, 'publicUsers']);
         Route::post('/contacts', [ContactController::class, 'store']);
         Route::put('/contacts/{id}', [ContactController::class, 'update']);
         Route::post('/contact/delete', [ContactController::class, 'destroy']);
@@ -133,5 +134,6 @@ Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activi
     Route::get('/users/thrift-applications', [\App\Http\Controllers\UserController::class, 'listThriftApplications']);
     Route::get('/users/thrift-rejected', [\App\Http\Controllers\UserController::class, 'listRejectedPackages']);
 });
+
 
 ?>

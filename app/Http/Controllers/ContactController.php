@@ -73,7 +73,7 @@ class ContactController extends Controller
         return response()->json(['message' => 'Contact created successfully.', 'contact' => $contactArr], 201);
     }
 
-    // Get all contacts and users in a single endpoint with filtering options
+    // Get all contacts for the merchant (no users)
     public function index(Request $request)
     {
         $merchant = Auth::guard('merchant')->user();
@@ -81,81 +81,39 @@ class ContactController extends Controller
             return response()->json(['message' => 'Unauthorized, What are you doing bro!'], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Get filter parameter (contacts, users, or all)
-        $filter = $request->get('filter', 'all'); // Default to 'all'
         $perPage = 10;
         $page = $request->get('page', 1);
 
+        $contacts = Contact::where('merchant_id', $merchant->id)
+                          ->with('groups:id,name,color')
+                          ->orderBy('created_at', 'asc')
+                          ->get(['id', 'merchant_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+
         $combinedData = collect();
         $sequentialId = 1;
-
-        // Get merchant's existing contact emails for checking duplicates
-        $existingContactEmails = Contact::where('merchant_id', $merchant->id)
-                                      ->pluck('email')
-                                      ->toArray();
-
-        // Add contacts if requested
-        if ($filter === 'all' || $filter === 'contacts') {
-            $contacts = Contact::where('merchant_id', $merchant->id)
-                              ->with('groups:id,name,color')
-                              ->orderBy('created_at', 'asc')
-                              ->get(['id', 'merchant_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
-
-            foreach ($contacts as $contact) {
-                $combinedData->push([
-                    'id' => $sequentialId,
-                    'contact_id' => $contact->id,
-                    'merchant_id' => $contact->merchant ? $contact->merchant->mer_id : null,
-                    'name' => $contact->name,
-                    'email' => $contact->email,
-                    'phone_number' => $contact->phone_number,
-                    'profile_image' => $contact->profile_image_url,
-                    'created_at' => $contact->created_at,
-                    'updated_at' => $contact->updated_at,
-                    'type' => 'contact',
-                    'deletable' => true,
-                    'already_added' => true,
-                    'groups' => $contact->groups->map(function($group) {
-                        return [
-                            'id' => $group->id,
-                            'name' => $group->name,
-                            'color' => $group->color
-                        ];
-                    })
-                ]);
-                $sequentialId++;
-            }
-        }
-
-        // Add users if requested
-        if ($filter === 'all' || $filter === 'users') {
-            $users = User::orderBy('created_at', 'asc')
-                        ->get(['id', 'user_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
-
-            foreach ($users as $user) {
-                // Skip users that are already in contacts when showing 'all'
-                $isAlreadyAdded = in_array($user->email, $existingContactEmails);
-                
-                if ($filter === 'all' && $isAlreadyAdded) {
-                    continue; // Skip users already added when showing combined view
-                }
-
-                $combinedData->push([
-                    'id' => $sequentialId,
-                    'user_id' => $user->user_id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'phone_number' => $user->phone_number,
-                    'profile_image' => $user->profile_image_url ?? null,
-                    'created_at' => $user->created_at,
-                    'updated_at' => $user->updated_at,
-                    'type' => 'user',
-                    'deletable' => false,
-                    'already_added' => $isAlreadyAdded,
-                    'groups' => []
-                ]);
-                $sequentialId++;
-            }
+        foreach ($contacts as $contact) {
+            $combinedData->push([
+                'id' => $sequentialId,
+                'contact_id' => $contact->id,
+                'merchant_id' => $contact->merchant ? $contact->merchant->mer_id : null,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'phone_number' => $contact->phone_number,
+                'profile_image' => $contact->profile_image_url,
+                'created_at' => $contact->created_at,
+                'updated_at' => $contact->updated_at,
+                'type' => 'contact',
+                'deletable' => true,
+                'already_added' => true,
+                'groups' => $contact->groups->map(function($group) {
+                    return [
+                        'id' => $group->id,
+                        'name' => $group->name,
+                        'color' => $group->color
+                    ];
+                })
+            ]);
+            $sequentialId++;
         }
 
         $paginated = $combinedData->forPage($page, $perPage)->values();
@@ -164,7 +122,38 @@ class ContactController extends Controller
 
         return response()->json([
             'data' => $paginated,
-            'filter' => $filter,
+            'filter' => 'contacts',
+            'total' => $total,
+            'per_page' => $perPage,
+            'current_page' => (int) $page,
+            'last_page' => $lastPage
+        ]);
+    }
+
+    // New endpoint: Get all users (public data only)
+    public function publicUsers(Request $request)
+    {
+        $perPage = 10;
+        $page = $request->get('page', 1);
+        $users = User::orderBy('created_at', 'asc')
+            ->get(['id', 'user_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+        $publicUsers = $users->map(function($user) {
+            return [
+                'id' => $user->id,
+                'user_id' => $user->user_id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone_number' => $user->phone_number,
+                'profile_image' => $user->profile_image_url ?? null,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+            ];
+        });
+        $paginated = $publicUsers->forPage($page, $perPage)->values();
+        $total = $publicUsers->count();
+        $lastPage = (int) ceil($total / $perPage);
+        return response()->json([
+            'data' => $paginated,
             'total' => $total,
             'per_page' => $perPage,
             'current_page' => (int) $page,
