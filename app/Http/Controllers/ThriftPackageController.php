@@ -1005,19 +1005,21 @@ class ThriftPackageController extends Controller
         if ($contributors && is_array($contributors)) {
             // Remove all previous contributors and add new
             $package->contributors()->delete();
-            foreach ($contributors as $id) {
-                $userModel = \App\Models\User::find($id);
-                $contactModel = \App\Models\Contact::find($id);
-                if ($userModel) {
-                    ThriftContributor::firstOrCreate([
-                        'thrift_package_id' => $package->id,
-                        'user_id' => $id,
-                    ]);
-                } elseif ($contactModel) {
-                    ThriftContributor::firstOrCreate([
-                        'thrift_package_id' => $package->id,
-                        'contact_id' => $id,
-                    ]);
+            foreach ($contributors as $group) {
+                if (is_array($group) && isset($group['id'], $group['type']) && is_array($group['id'])) {
+                    foreach ($group['id'] as $singleId) {
+                        if ($group['type'] === 'user') {
+                            ThriftContributor::firstOrCreate([
+                                'thrift_package_id' => $package->id,
+                                'user_id' => $singleId,
+                            ]);
+                        } elseif ($group['type'] === 'contact') {
+                            ThriftContributor::firstOrCreate([
+                                'thrift_package_id' => $package->id,
+                                'contact_id' => $singleId,
+                            ]);
+                        }
+                    }
                 }
             }
         }
