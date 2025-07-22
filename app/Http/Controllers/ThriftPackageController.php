@@ -882,4 +882,151 @@ class ThriftPackageController extends Controller
         unset($arr['admins']);
         return response()->json($arr, 200);
     }
+
+    /**
+     * Save or update thrift package progress (multi-step, all-in-one endpoint)
+     */
+    public function saveProgress(Request $request)
+    {
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $data = $request->input('data', []);
+        $step = $request->input('step', 'all');
+        $packageId = $request->input('package_id');
+        $status = $request->input('status', 'draft');
+
+        // Validate details if present
+        $details = $data['details'] ?? null;
+        $terms = $data['terms'] ?? null;
+        $contributors = $data['contributors'] ?? null;
+
+        $package = null;
+        $isNew = false;
+        if ($packageId) {
+            // Update existing
+            $query = ThriftPackage::query();
+            if ($merchant) {
+                $query->where('id', $packageId)->where('merchant_id', $merchant->id);
+            } elseif ($user) {
+                $query->where('id', $packageId)
+                    ->where(function($q) use ($user) {
+                        $q->where('created_by_type', 'user')->where('created_by_id', $user->id);
+                    });
+            }
+            $package = $query->first();
+            if (!$package) {
+                return response()->json(['message' => 'Thrift package not found or not accessible.'], 404);
+            }
+        }
+
+        // If no package, create new
+        if (!$package) {
+            if (!$details) {
+                return response()->json(['message' => 'Details required for new package.'], 422);
+            }
+            $rules = [
+                'name' => [
+                    'required',
+                    'string',
+                    'max:255',
+                    Rule::unique('thrift_packages')->where(function ($query) use ($user, $merchant) {
+                        if ($merchant) {
+                            return $query->where('created_by_type', 'merchant')
+                                         ->where('created_by_id', $merchant->id);
+                        } elseif ($user) {
+                            return $query->where('created_by_type', 'user')
+                                         ->where('created_by_id', $user->id);
+                        }
+                        return $query;
+                    }),
+                ],
+                'total_amount' => 'required|numeric|min:1',
+                'duration_days' => 'required|integer|min:1',
+                'slots' => 'required|integer|min:1',
+            ];
+            $validated = validator($details, $rules)->validate();
+            $validated['status'] = $status;
+            if ($merchant) {
+                $validated['merchant_id'] = $merchant->id;
+                $validated['created_by_type'] = 'merchant';
+                $validated['created_by_id'] = $merchant->id;
+            } elseif ($user) {
+                $validated['merchant_id'] = null;
+                $validated['created_by_type'] = 'user';
+                $validated['created_by_id'] = $user->id;
+            } else {
+                return response()->json(['message' => 'Unauthorized'], 401);
+            }
+            $package = ThriftPackage::create($validated);
+            $isNew = true;
+            // If user, add as admin
+            if ($user) {
+                $package->admins()->syncWithoutDetaching([$user->id]);
+            }
+        } else {
+            // Update details if present
+            if ($details) {
+                $rules = [
+                    'name' => [
+                        'required',
+                        'string',
+                        'max:255',
+                        Rule::unique('thrift_packages')->ignore($package->id)->where(function ($query) use ($user, $merchant, $package) {
+                            if ($merchant) {
+                                return $query->where('created_by_type', 'merchant')
+                                             ->where('created_by_id', $merchant->id);
+                            } elseif ($user) {
+                                return $query->where('created_by_type', 'user')
+                                             ->where('created_by_id', $user->id);
+                            }
+                            return $query;
+                        }),
+                    ],
+                    'total_amount' => 'required|numeric|min:1',
+                    'duration_days' => 'required|integer|min:1',
+                    'slots' => 'required|integer|min:1',
+                ];
+                $validated = validator($details, $rules)->validate();
+                $package->fill($validated);
+            }
+            // Always update status
+            $package->status = $status;
+            $package->save();
+        }
+
+        // Update terms if present
+        if ($terms) {
+            // Accepts: ["terms_accepted" => true/false]
+            $package->terms_accepted = $terms['terms_accepted'] ?? $package->terms_accepted;
+            $package->save();
+        }
+
+        // Update contributors if present
+        if ($contributors && is_array($contributors)) {
+            // Remove all previous contributors and add new
+            $package->contributors()->delete();
+            foreach ($contributors as $id) {
+                $userModel = \App\Models\User::find($id);
+                $contactModel = \App\Models\Contact::find($id);
+                if ($userModel) {
+                    ThriftContributor::firstOrCreate([
+                        'thrift_package_id' => $package->id,
+                        'user_id' => $id,
+                    ]);
+                } elseif ($contactModel) {
+                    ThriftContributor::firstOrCreate([
+                        'thrift_package_id' => $package->id,
+                        'contact_id' => $id,
+                    ]);
+                }
+            }
+        }
+
+        $arr = $package->toArray();
+        if ($package->merchant && isset($package->merchant->mer_id)) {
+            $arr['merchant_id'] = $package->merchant->mer_id;
+        }
+        $arr['is_new'] = $isNew;
+        return response()->json($arr, $isNew ? 201 : 200);
+    }
 } 

@@ -99,6 +99,7 @@ Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activi
 
     // Thrift Package routes
     Route::prefix('thrift-packages')->group(function () {
+        Route::post('/save-progress', [\App\Http\Controllers\ThriftPackageController::class, 'saveProgress']);
         Route::get('/public', [\App\Http\Controllers\ThriftPackageController::class, 'listPublicPackages']);
         Route::get('/public/{id}', [\App\Http\Controllers\ThriftPackageController::class, 'showPublicPackage']);
         Route::get('/{id}', [\App\Http\Controllers\ThriftPackageController::class, 'show']);
