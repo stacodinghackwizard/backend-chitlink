@@ -663,8 +663,8 @@ class ThriftPackageController extends Controller
         if (!$invite) {
             return response()->json(['message' => 'Invite not found.'], 404);
         }
-        \Log::info('User ID:', ['user_id' => $user->id, 'invited_user_id' => $invite->invited_user_id]);
-        if ($invite->invited_user_id !== $user->id) {
+        // Ensure both IDs are treated as integers
+        if ((int)$invite->invited_user_id !== (int)$user->id) {
             return response()->json(['message' => 'Forbidden: Not your invite.'], 403);
         }
         if ($invite->status !== 'pending') {
