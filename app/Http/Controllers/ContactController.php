@@ -84,37 +84,37 @@ class ContactController extends Controller
         $perPage = 10;
         $page = $request->get('page', 1);
 
-        $contacts = Contact::where('merchant_id', $merchant->id)
-                          ->with('groups:id,name,color')
-                          ->orderBy('created_at', 'asc')
-                          ->get(['id', 'merchant_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+            $contacts = Contact::where('merchant_id', $merchant->id)
+                              ->with('groups:id,name,color')
+                              ->orderBy('created_at', 'asc')
+                              ->get(['id', 'merchant_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
 
         $combinedData = collect();
         $sequentialId = 1;
-        foreach ($contacts as $contact) {
-            $combinedData->push([
-                'id' => $sequentialId,
-                'contact_id' => $contact->id,
-                'merchant_id' => $contact->merchant ? $contact->merchant->mer_id : null,
-                'name' => $contact->name,
-                'email' => $contact->email,
-                'phone_number' => $contact->phone_number,
-                'profile_image' => $contact->profile_image_url,
-                'created_at' => $contact->created_at,
-                'updated_at' => $contact->updated_at,
-                'type' => 'contact',
-                'deletable' => true,
-                'already_added' => true,
-                'groups' => $contact->groups->map(function($group) {
-                    return [
-                        'id' => $group->id,
-                        'name' => $group->name,
-                        'color' => $group->color
-                    ];
-                })
-            ]);
-            $sequentialId++;
-        }
+            foreach ($contacts as $contact) {
+                $combinedData->push([
+                    'id' => $sequentialId,
+                    'contact_id' => $contact->id,
+                    'merchant_id' => $contact->merchant ? $contact->merchant->mer_id : null,
+                    'name' => $contact->name,
+                    'email' => $contact->email,
+                    'phone_number' => $contact->phone_number,
+                    'profile_image' => $contact->profile_image_url,
+                    'created_at' => $contact->created_at,
+                    'updated_at' => $contact->updated_at,
+                    'type' => 'contact',
+                    'deletable' => true,
+                    'already_added' => true,
+                    'groups' => $contact->groups->map(function($group) {
+                        return [
+                            'id' => $group->id,
+                            'name' => $group->name,
+                            'color' => $group->color
+                        ];
+                    })
+                ]);
+                $sequentialId++;
+            }
 
         $paginated = $combinedData->forPage($page, $perPage)->values();
         $total = $combinedData->count();
@@ -135,18 +135,18 @@ class ContactController extends Controller
     {
         $perPage = 10;
         $page = $request->get('page', 1);
-        $users = User::orderBy('created_at', 'asc')
-            ->get(['id', 'user_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
+            $users = User::orderBy('created_at', 'asc')
+                        ->get(['id', 'user_id', 'name', 'email', 'phone_number', 'profile_image', 'created_at', 'updated_at']);
         $publicUsers = $users->map(function($user) {
             return [
                 'id' => $user->id,
-                'user_id' => $user->user_id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone_number' => $user->phone_number,
-                'profile_image' => $user->profile_image_url ?? null,
-                'created_at' => $user->created_at,
-                'updated_at' => $user->updated_at,
+                    'user_id' => $user->user_id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone_number' => $user->phone_number,
+                    'profile_image' => $user->profile_image_url ?? null,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
             ];
         });
         $paginated = $publicUsers->forPage($page, $perPage)->values();
