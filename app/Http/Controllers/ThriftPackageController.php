@@ -896,12 +896,10 @@ class ThriftPackageController extends Controller
         $packageId = $request->input('package_id');
         $status = $request->input('status', 'draft');
 
-        // Validate details if present
         $details = $data['details'] ?? null;
         $terms = $data['terms'] ?? null;
         $contributors = $data['contributors'] ?? null;
 
-        // Check if the user is authorized
         if (!$merchant && !$user) {
             return response()->json(['message' => 'Unauthorized: You do not have permission to create or update this package.'], 401);
         }
@@ -909,7 +907,6 @@ class ThriftPackageController extends Controller
         $package = null;
         $isNew = false;
         if ($packageId) {
-            // Update existing
             $query = ThriftPackage::query();
             if ($merchant) {
                 $query->where('id', $packageId)->where('merchant_id', $merchant->id);
@@ -965,7 +962,7 @@ class ThriftPackageController extends Controller
             }
             $package = ThriftPackage::create($validated);
             $isNew = true;
-            // If user, add as admin
+            // Only add user as admin, never merchant
             if ($user) {
                 $package->admins()->syncWithoutDetaching([$user->id]);
             }
@@ -995,21 +992,18 @@ class ThriftPackageController extends Controller
                 $validated = validator($details, $rules)->validate();
                 $package->fill($validated);
             }
-            // Always update status
             $package->status = $status;
             $package->save();
         }
 
         // Update terms if present
         if ($terms) {
-            // Accepts: ["terms_accepted" => true/false]
             $package->terms_accepted = $terms['terms_accepted'] ?? $package->terms_accepted;
             $package->save();
         }
 
         // Update contributors if present
         if ($contributors && is_array($contributors)) {
-            // Remove all previous contributors and add new
             $package->contributors()->delete();
             $invalidContributors = [];
             foreach ($contributors as $group) {
@@ -1028,8 +1022,8 @@ class ThriftPackageController extends Controller
                         } elseif ($group['type'] === 'contact') {
                             $contactModel = \App\Models\Contact::find($singleId);
                             if ($contactModel) {
-                                // Check if the contact belongs to the current merchant
-                                if ($contactModel->merchant_id === $merchant->id) {
+                                // Only allow merchant to add their own contacts
+                                if ($merchant && $contactModel->merchant_id === $merchant->id) {
                                     ThriftContributor::firstOrCreate([
                                         'thrift_package_id' => $package->id,
                                         'contact_id' => $singleId,
@@ -1049,14 +1043,13 @@ class ThriftPackageController extends Controller
                 }
             }
             if (!empty($invalidContributors)) {
-                // Attach info to response
                 $arr = $package->toArray();
                 if ($package->merchant && isset($package->merchant->mer_id)) {
                     $arr['merchant_id'] = $package->merchant->mer_id;
                 }
                 $arr['is_new'] = $isNew;
                 $arr['invalid_contributors'] = $invalidContributors;
-                return response()->json($arr, 207); // 207 Multi-Status
+                return response()->json($arr, 207);
             }
         }
 
@@ -1067,4 +1060,4 @@ class ThriftPackageController extends Controller
         $arr['is_new'] = $isNew;
         return response()->json($arr, $isNew ? 201 : 200);
     }
-} 
+}
