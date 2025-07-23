@@ -937,6 +937,10 @@ class ThriftPackageController extends Controller
             if (!$details) {
                 return response()->json(['message' => 'Details required for new package.'], 422);
             }
+            // Check terms_accepted before creating package
+            if (empty($terms) || empty($terms['terms_accepted']) || $terms['terms_accepted'] !== true) {
+                return response()->json(['message' => 'You must accept the Terms & Conditions before creating a thrift package.'], 403);
+            }
             $rules = [
                 'name' => [
                     'required',
