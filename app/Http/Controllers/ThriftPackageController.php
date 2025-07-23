@@ -901,6 +901,11 @@ class ThriftPackageController extends Controller
         $terms = $data['terms'] ?? null;
         $contributors = $data['contributors'] ?? null;
 
+        // Check if the user is authorized
+        if (!$merchant && !$user) {
+            return response()->json(['message' => 'Unauthorized: You do not have permission to create or update this package.'], 401);
+        }
+
         $package = null;
         $isNew = false;
         if ($packageId) {
