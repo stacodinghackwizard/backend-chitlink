@@ -1022,17 +1022,26 @@ class ThriftPackageController extends Controller
                             }
                         } elseif ($group['type'] === 'contact') {
                             $contactModel = \App\Models\Contact::find($singleId);
-                            if ($contactModel && $contactModel->merchant_id === $merchant->id) {
-                                ThriftContributor::firstOrCreate([
-                                    'thrift_package_id' => $package->id,
+                            if ($contactModel) {
+                                \Log::info('Checking contact ownership:', [
                                     'contact_id' => $singleId,
+                                    'contact_merchant_id' => $contactModel->merchant_id,
+                                    'current_merchant_id' => $merchant->id
                                 ]);
+                                if ($contactModel->merchant_id === $merchant->id) {
+                                    ThriftContributor::firstOrCreate([
+                                        'thrift_package_id' => $package->id,
+                                        'contact_id' => $singleId,
+                                    ]);
+                                } else {
+                                    $invalidContributors[] = [
+                                        'id' => $singleId,
+                                        'type' => 'contact',
+                                        'message' => 'Forbidden: This contact does not belong to you.'
+                                    ];
+                                }
                             } else {
-                                $invalidContributors[] = [
-                                    'id' => $singleId,
-                                    'type' => 'contact',
-                                    'message' => 'Forbidden: This contact does not belong to you.'
-                                ];
+                                $invalidContributors[] = ['id' => $singleId, 'type' => 'contact'];
                             }
                         }
                     }
