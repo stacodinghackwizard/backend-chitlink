@@ -43,9 +43,14 @@ class ThriftPackage extends Model
         return $this->hasMany(ThriftTransaction::class);
     }
 
-    public function admins()
+    public function userAdmins()
     {
-        return $this->belongsToMany(User::class, 'thrift_admins');
+        return $this->belongsToMany(User::class, 'thrift_admins', 'thrift_package_id', 'user_id');
+    }
+
+    public function merchantAdmins()
+    {
+        return $this->belongsToMany(Merchant::class, 'thrift_admins', 'thrift_package_id', 'merchant_id');
     }
 
     public function invites()
@@ -70,4 +75,4 @@ class ThriftPackage extends Model
     {
         return $this->created_by_type === 'user' ? $this->created_by_id : null;
     }
-} 
+}
