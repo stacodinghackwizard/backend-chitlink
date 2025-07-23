@@ -1159,10 +1159,23 @@ class ThriftPackageController extends Controller
         if (!$amount || $amount < 1) {
             return response()->json(['message' => 'Invalid amount.'], 422);
         }
-        // Restrict merchant to only initiate payment for their own package
+        // Restrict merchant to only initiate payment for their own package or for their contact contributor
         if ($merchant) {
             if ($package->merchant_id !== $merchant->id) {
                 return response()->json(['message' => 'Forbidden: You do not own this package.'], 403);
+            }
+            // If contributor_type is contact, check if contact belongs to merchant and is a confirmed contributor for this package
+            $meta = $request->input('meta', []);
+            if (isset($meta['contributor_type']) && $meta['contributor_type'] === 'contact' && isset($meta['contributor_id'])) {
+                $contactId = $meta['contributor_id'];
+                $contact = \App\Models\Contact::where('id', $contactId)->where('merchant_id', $merchant->id)->first();
+                $isContributor = \App\Models\ThriftContributor::where('thrift_package_id', $package->id)
+                    ->where('contact_id', $contactId)
+                    ->where('status', 'confirmed')
+                    ->exists();
+                if (!$contact || !$isContributor) {
+                    return response()->json(['message' => 'Forbidden: Contact is not a confirmed contributor for this package.'], 403);
+                }
             }
         }
         // Restrict user to only initiate payment for their own or admin package
@@ -1177,12 +1190,19 @@ class ThriftPackageController extends Controller
         if (!$email) {
             return response()->json(['message' => 'No email found for payment.'], 422);
         }
-        $meta = [
-            'thrift_package_id' => $package->id,
-            'contributor_id' => $user ? $user->id : ($merchant ? $merchant->id : null),
-            'contributor_type' => $user ? 'user' : 'merchant',
-            'amount' => $amount,
-        ];
+        // Use meta from request if provided, else fallback to user/merchant
+        $meta = $request->input('meta', []);
+        if (empty($meta)) {
+            $meta = [
+                'thrift_package_id' => $package->id,
+                'contributor_id' => $user ? $user->id : ($merchant ? $merchant->id : null),
+                'contributor_type' => $user ? 'user' : 'merchant',
+                'amount' => $amount,
+            ];
+        } else {
+            $meta['thrift_package_id'] = $package->id;
+            $meta['amount'] = $amount;
+        }
         $paystackConfig = config('paystack');
         $response = \Http::withHeaders([
             'Authorization' => 'Bearer ' . $paystackConfig['secret_key'],
