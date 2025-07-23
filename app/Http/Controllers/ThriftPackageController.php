@@ -1161,7 +1161,7 @@ class ThriftPackageController extends Controller
         }
         // Restrict merchant to only initiate payment for their own package or for their contact contributor
         if ($merchant) {
-            if ($package->merchant_id !== $merchant->id) {
+            if ((int)$package->merchant_id !== (int)$merchant->id) {
                 return response()->json(['message' => 'Forbidden: You do not own this package.'], 403);
             }
             // If contributor_type is contact, check if contact belongs to merchant and is a confirmed contributor for this package
