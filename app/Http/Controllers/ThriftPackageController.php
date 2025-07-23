@@ -1183,7 +1183,8 @@ class ThriftPackageController extends Controller
             }
         }
         // Restrict user to only initiate payment for their own or admin package
-        if ($user) {
+        // Only check user access if merchant is NOT authenticated
+        if (!$merchant && $user) {
             $isOwner = $package->created_by_type === 'user' && $package->created_by_id === $user->id;
             $isAdmin = $package->userAdmins()->where('users.id', $user->id)->exists();
             \Log::info('User attempting payment', ['user_id' => $user->id, 'is_owner' => $isOwner, 'is_admin' => $isAdmin]);
