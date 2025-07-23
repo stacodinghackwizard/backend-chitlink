@@ -1036,7 +1036,7 @@ class ThriftPackageController extends Controller
                             $contactModel = \App\Models\Contact::find($singleId);
                             if ($contactModel) {
                                 // Only allow merchant to add their own contacts
-                                if ($merchant && $contactModel->merchant_id === $merchant->id) {
+                            if ($merchant && (int)$contactModel->merchant_id === (int)$merchant->id) {
                                     ThriftContributor::firstOrCreate([
                                         'thrift_package_id' => $package->id,
                                         'contact_id' => $singleId,
