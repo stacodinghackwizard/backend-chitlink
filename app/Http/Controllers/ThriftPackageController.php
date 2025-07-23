@@ -127,13 +127,19 @@ class ThriftPackageController extends Controller
             $validated['created_by_id'] = $merchant->id;
             $package = ThriftPackage::create($validated);
             // Add merchant as admin
-            $package->merchantAdmins()->syncWithoutDetaching([$merchant->id]);
+            // Only add merchant as admin if merchant exists in merchants table
+            if ($merchant && Merchant::find($merchant->id)) {
+                $package->merchantAdmins()->syncWithoutDetaching([$merchant->id]);
+            }
         } elseif ($user) {
             $validated['merchant_id'] = null; // Explicitly set to null for user
             $validated['created_by_type'] = 'user';
             $validated['created_by_id'] = $user->id;
             $package = ThriftPackage::create($validated);
-            $package->userAdmins()->syncWithoutDetaching([$user->id]);
+            // Only add user as admin if user exists in users table
+            if ($user && User::find($user->id)) {
+                $package->userAdmins()->syncWithoutDetaching([$user->id]);
+            }
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -598,7 +604,10 @@ class ThriftPackageController extends Controller
         }
 
         $newAdmin = \App\Models\User::findOrFail($request->user_id);
-        $thriftPackage->userAdmins()->syncWithoutDetaching([$newAdmin->id]);
+        // Only add as admin if user exists
+        if ($newAdmin && User::find($newAdmin->id)) {
+            $thriftPackage->userAdmins()->syncWithoutDetaching([$newAdmin->id]);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -965,7 +974,10 @@ class ThriftPackageController extends Controller
             $isNew = true;
             // Only add user as admin, never merchant
             if ($user) {
-                $package->userAdmins()->syncWithoutDetaching([$user->id]);
+                // Only add user as admin if user exists in users table
+                if ($user && User::find($user->id)) {
+                    $package->userAdmins()->syncWithoutDetaching([$user->id]);
+                }
             }
         } else {
             // Update details if present
