@@ -1303,6 +1303,13 @@ class ThriftPackageController extends Controller
             $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
         } elseif ($merchant) {
             $wallet = \App\Models\Wallet::where('merchant_id', $merchant->id)->first();
+            if (!$wallet) {
+                // Try contact wallet for merchant
+                $contact = \App\Models\Contact::where('merchant_id', $merchant->id)->first();
+                if ($contact) {
+                    $wallet = \App\Models\Wallet::where('contact_id', $contact->id)->first();
+                }
+            }
         }
         if (!$wallet) {
             return response()->json(['message' => 'Wallet not found.'], 404);
@@ -1321,17 +1328,25 @@ class ThriftPackageController extends Controller
     {
         $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $transaction = \App\Models\WalletTransaction::find($transactionId);
+        $transaction = \App\Models\WalletTransaction::where('reference', $transactionId)->orWhere('id', $transactionId)->first();
         if (!$transaction) {
             return response()->json(['message' => 'Transaction not found.'], 404);
         }
-        // Ensure the transaction belongs to the authenticated user/merchant
         $wallet = $transaction->wallet;
+        $hasAccess = false;
         if ($user && $wallet->user_id === $user->id) {
-            // OK
-        } elseif ($merchant && $wallet->merchant_id === $merchant->id) {
-            // OK
-        } else {
+            $hasAccess = true;
+        } elseif ($merchant) {
+            if ($wallet->merchant_id === $merchant->id) {
+                $hasAccess = true;
+            } else if ($wallet->contact_id) {
+                $contact = \App\Models\Contact::find($wallet->contact_id);
+                if ($contact && $contact->merchant_id === $merchant->id) {
+                    $hasAccess = true;
+                }
+            }
+        }
+        if (!$hasAccess) {
             return response()->json(['message' => 'Forbidden: You do not have access to this transaction.'], 403);
         }
         return response()->json(['transaction' => $transaction]);
