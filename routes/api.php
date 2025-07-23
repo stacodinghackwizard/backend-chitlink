@@ -117,6 +117,17 @@ Route::middleware(['auth:sanctum', 'handle.expired.tokens', 'update.token.activi
         Route::post('/{id}/slots/{slotNo}/accept', [\App\Http\Controllers\ThriftPackageController::class, 'acceptSlotRequest']);
         Route::post('/{id}/slots/{slotNo}/decline', [\App\Http\Controllers\ThriftPackageController::class, 'declineSlotRequest']);
         Route::post('/{id}/add-admin', [\App\Http\Controllers\ThriftPackageController::class, 'addAdmin']);
+
+        // Paystack: Initialize contribution payment with metadata
+        Route::post('/{packageId}/initialize-contribution-payment', [\App\Http\Controllers\ThriftPackageController::class, 'initializeContributionPayment']);
+        // Paystack: Verify contribution payment and update wallet
+        Route::post('/verify-contribution-payment', [\App\Http\Controllers\ThriftPackageController::class, 'verifyContributionPayment']);
+        // Paystack: Get wallet transaction history
+        Route::get('/wallet-transactions', [\App\Http\Controllers\ThriftPackageController::class, 'walletTransactions']);
+        // Paystack: Withdraw from wallet
+        Route::post('/{id}/payout', [\App\Http\Controllers\ThriftPackageController::class, 'payout']);
+        // Paystack: View a particular wallet transaction (receipt)
+        Route::get('/wallet-transactions/{transactionId}', [\App\Http\Controllers\ThriftPackageController::class, 'showWalletTransaction']);
     });
 
     Route::controller(AuthController::class)->group(function() {

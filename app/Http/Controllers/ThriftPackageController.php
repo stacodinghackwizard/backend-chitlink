@@ -18,7 +18,7 @@ use App\Models\User;
 use App\Models\Merchant;
 use Illuminate\Support\Carbon;
 
-class ThriftPackageController extends Controller
+class ThriftPackageController extends Controller 
 {
     public function __construct()
     {
@@ -557,11 +557,80 @@ class ThriftPackageController extends Controller
         return response()->json(['transactions' => $transactions]);
     }
 
-    // Payout (stub)
+    /**
+     * Payout: verify bank and transfer from wallet to account using Paystack
+     */
     public function payout(Request $request, $id)
     {
-        // Implement payout logic
-        return response()->json(['message' => 'Payout processed (stub)']);
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $wallet = null;
+        if ($user) {
+            $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+        } elseif ($merchant) {
+            $wallet = \App\Models\Wallet::where('merchant_id', $merchant->id)->first();
+        }
+        if (!$wallet || $wallet->balance < 1) {
+            return response()->json(['message' => 'Insufficient wallet balance.'], 400);
+        }
+        $amount = $request->input('amount');
+        $bankCode = $request->input('bank_code');
+        $accountNumber = $request->input('account_number');
+        $accountName = $request->input('account_name');
+        if (!$amount || !$bankCode || !$accountNumber || !$accountName) {
+            return response()->json(['message' => 'All fields (amount, bank_code, account_number, account_name) are required.'], 422);
+        }
+        if ($amount > $wallet->balance) {
+            return response()->json(['message' => 'Withdrawal amount exceeds wallet balance.'], 400);
+        }
+        $paystackConfig = config('paystack');
+        // Step 1: Create transfer recipient
+        $recipientRes = \Http::withHeaders([
+            'Authorization' => 'Bearer ' . $paystackConfig['secret_key'],
+            'Content-Type' => 'application/json',
+        ])->post($paystackConfig['base_url'] . '/transferrecipient', [
+            'type' => 'nuban',
+            'name' => $accountName,
+            'account_number' => $accountNumber,
+            'bank_code' => $bankCode,
+            'currency' => 'NGN',
+        ]);
+        $recipientData = $recipientRes->json();
+        if (!$recipientData['status'] || empty($recipientData['data']['recipient_code'])) {
+            return response()->json(['message' => 'Bank verification failed.', 'result' => $recipientData], 400);
+        }
+        $recipientCode = $recipientData['data']['recipient_code'];
+        // Step 2: Initiate transfer
+        $transferRes = \Http::withHeaders([
+            'Authorization' => 'Bearer ' . $paystackConfig['secret_key'],
+            'Content-Type' => 'application/json',
+        ])->post($paystackConfig['base_url'] . '/transfer', [
+            'source' => 'balance',
+            'amount' => (int)$amount * 100, // Paystack expects kobo
+            'recipient' => $recipientCode,
+            'reason' => 'Thrift withdrawal',
+        ]);
+        $transferData = $transferRes->json();
+        if (!$transferData['status']) {
+            return response()->json(['message' => 'Transfer failed.', 'result' => $transferData], 400);
+        }
+        // Step 3: Deduct from wallet and log transaction
+        $wallet->balance -= $amount;
+        $wallet->save();
+        $transaction = \App\Models\WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => 'withdrawal',
+            'amount' => $amount,
+            'reference' => $transferData['data']['reference'] ?? null,
+            'status' => $transferData['data']['status'] ?? 'pending',
+            'meta' => $transferData['data'],
+        ]);
+        return response()->json([
+            'message' => 'Withdrawal initiated.',
+            'wallet' => $wallet,
+            'transaction' => $transaction,
+            'paystack' => $transferData['data'],
+        ]);
     }
 
     // Request slot (stub)
@@ -1077,4 +1146,146 @@ class ThriftPackageController extends Controller
         $arr['is_new'] = $isNew;
         return response()->json($arr, $isNew ? 201 : 200);
     }
+
+      /**
+     * Initialize Paystack payment for thrift contribution
+     */
+    public function initializeContributionPayment(Request $request, $packageId)
+    {
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $package = ThriftPackage::findOrFail($packageId);
+        $amount = $request->input('amount');
+        if (!$amount || $amount < 1) {
+            return response()->json(['message' => 'Invalid amount.'], 422);
+        }
+        $email = $user ? $user->email : ($merchant ? $merchant->email : null);
+        if (!$email) {
+            return response()->json(['message' => 'No email found for payment.'], 422);
+        }
+        $meta = [
+            'thrift_package_id' => $package->id,
+            'contributor_id' => $user ? $user->id : ($merchant ? $merchant->id : null),
+            'contributor_type' => $user ? 'user' : 'merchant',
+            'amount' => $amount,
+            'name' => $user ? $user->name : ($merchant ? $merchant->name : null),
+            'email' => $email,
+        ];
+        $paystackConfig = config('paystack');
+        $response = \Http::withHeaders([
+            'Authorization' => 'Bearer ' . $paystackConfig['secret_key'],
+            'Content-Type' => 'application/json',
+        ])->post($paystackConfig['base_url'] . '/transaction/initialize', [
+            'email' => $email,
+            'amount' => (int)$amount * 100, // Paystack expects kobo
+            'metadata' => $meta,
+        ]);
+        if ($response->failed()) {
+            return response()->json(['message' => 'Failed to initialize payment.', 'error' => $response->json()], 500);
+        }
+        return response()->json($response->json());
+    }
+
+       /**
+     * Verify Paystack payment and update wallet
+     */
+    public function verifyContributionPayment(Request $request)
+    {
+        $reference = $request->input('reference');
+        if (!$reference) {
+            return response()->json(['message' => 'Reference is required.'], 422);
+        }
+        $paystackConfig = config('paystack');
+        $response = \Http::withHeaders([
+            'Authorization' => 'Bearer ' . $paystackConfig['secret_key'],
+            'Content-Type' => 'application/json',
+        ])->get($paystackConfig['base_url'] . '/transaction/verify/' . $reference);
+        $result = $response->json();
+        if (!$result['status'] || $result['data']['status'] !== 'success') {
+            return response()->json(['message' => 'Payment not successful.', 'result' => $result], 400);
+        }
+        $meta = $result['data']['metadata'] ?? [];
+        $amount = $result['data']['amount'] / 100; // Convert from kobo
+        $contributorType = $meta['contributor_type'] ?? null;
+        $contributorId = $meta['contributor_id'] ?? null;
+        // Find wallet
+        $wallet = null;
+        if ($contributorType === 'user') {
+            $wallet = \App\Models\Wallet::firstOrCreate(['user_id' => $contributorId], ['balance' => 0]);
+        } elseif ($contributorType === 'merchant') {
+            $wallet = \App\Models\Wallet::firstOrCreate(['merchant_id' => $contributorId], ['balance' => 0]);
+        }
+        if (!$wallet) {
+            return response()->json(['message' => 'Wallet not found or could not be created.'], 500);
+        }
+        // Update wallet balance
+        $wallet->balance += $amount;
+        $wallet->save();
+        // Log transaction
+        $transaction = \App\Models\WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => 'contribution',
+            'amount' => $amount,
+            'reference' => $reference,
+            'status' => 'success',
+            'meta' => $result['data'],
+        ]);
+        return response()->json([
+            'message' => 'Payment verified and wallet updated.',
+            'wallet' => $wallet,
+            'transaction' => $transaction,
+            'paystack' => $result['data'],
+        ]);
+    }
+
+      /**
+     * Get wallet transaction history for user or merchant
+     */
+    public function walletTransactions(Request $request)
+    {
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $wallet = null;
+        if ($user) {
+            $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+        } elseif ($merchant) {
+            $wallet = \App\Models\Wallet::where('merchant_id', $merchant->id)->first();
+        }
+        if (!$wallet) {
+            return response()->json(['message' => 'Wallet not found.'], 404);
+        }
+        $transactions = $wallet->transactions()->orderBy('created_at', 'desc')->get();
+        return response()->json([
+            'wallet' => $wallet,
+            'transactions' => $transactions,
+        ]);
+    }
+
+        /**
+     * Show a single wallet transaction (receipt) by transactionId
+     */
+    public function showWalletTransaction($transactionId)
+    {
+        $user = Auth::user();
+        $merchant = Auth::guard('merchant')->user();
+        $transaction = \App\Models\WalletTransaction::find($transactionId);
+        if (!$transaction) {
+            return response()->json(['message' => 'Transaction not found.'], 404);
+        }
+        // Ensure the transaction belongs to the authenticated user/merchant
+        $wallet = $transaction->wallet;
+        if ($user && $wallet->user_id === $user->id) {
+            // OK
+        } elseif ($merchant && $wallet->merchant_id === $merchant->id) {
+            // OK
+        } else {
+            return response()->json(['message' => 'Forbidden: You do not have access to this transaction.'], 403);
+        }
+        return response()->json(['transaction' => $transaction]);
+    }
+
+
+
+
+
 }
