@@ -834,12 +834,12 @@ class ThriftPackageController extends Controller
     public function getUserInvites(Request $request)
     {
         $user = Auth::user();
-        $invites = $user->thriftInvites()->with('thriftPackage')->get()->map(function($invite) {
-            $arr = $invite->toArray();
-            unset($arr['invited_by_merchant_id']);
-            return $arr;
-        });
-        return response()->json(['invites' => $invites]);
+        // $invites = $user->thriftInvites()->with('thriftPackage')->get()->map(function($invite) {
+        //     $arr = $invite->toArray();
+        //     unset($arr['invited_by_merchant_id']);
+        //     return $arr;
+        // });
+        return response()->json(['message' => 'Not implemented: thriftInvites relation missing on User model.']);
     }
 
     /**
