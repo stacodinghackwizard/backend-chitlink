@@ -126,14 +126,14 @@ class ThriftPackageController extends Controller
             $validated['created_by_type'] = 'merchant';
             $validated['created_by_id'] = $merchant->id;
             $package = ThriftPackage::create($validated);
-            // Do NOT add merchant as admin
+            // Add merchant as admin
+            $package->merchantAdmins()->syncWithoutDetaching([$merchant->id]);
         } elseif ($user) {
             $validated['merchant_id'] = null; // Explicitly set to null for user
             $validated['created_by_type'] = 'user';
             $validated['created_by_id'] = $user->id;
             $package = ThriftPackage::create($validated);
-            // Only add as admin if user (not merchant)
-            $package->admins()->syncWithoutDetaching([$user->id]);
+            $package->userAdmins()->syncWithoutDetaching([$user->id]);
         } else {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -590,15 +590,15 @@ class ThriftPackageController extends Controller
         $merchant = Auth::guard('merchant')->user();
         $user = Auth::user();
 
-        $isMerchantOwner = $merchant && $thriftPackage->merchant_id === $merchant->id;
-        $isAdmin = $user && $thriftPackage->admins()->where('users.id', $user->id)->exists();
+        $isMerchantOwner = $merchant && $thriftPackage->merchantAdmins()->where('merchants.id', $merchant->id)->exists();
+        $isAdmin = $user && $thriftPackage->userAdmins()->where('users.id', $user->id)->exists();
 
         if (!$isMerchantOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an existing admin can add another admin.'], 403);
         }
 
         $newAdmin = \App\Models\User::findOrFail($request->user_id);
-        $thriftPackage->admins()->syncWithoutDetaching([$newAdmin->id]);
+        $thriftPackage->userAdmins()->syncWithoutDetaching([$newAdmin->id]);
 
         return response()->json([
             'status' => 'success',
@@ -776,7 +776,8 @@ class ThriftPackageController extends Controller
             return response()->json(['message' => 'Thrift package not found.'], 404);
         }
         $isOwner = $merchant && $package->merchant_id === $merchant->id;
-        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        $isAdmin = ($user && $package->userAdmins()->where('users.id', $user->id)->exists())
+            || ($merchant && $package->merchantAdmins()->where('merchants.id', $merchant->id)->exists());
         if (!$isOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an admi can view applications.'], 403);
         }
