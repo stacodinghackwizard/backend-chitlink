@@ -1023,12 +1023,14 @@ class ThriftPackageController extends Controller
                         } elseif ($group['type'] === 'contact') {
                             $contactModel = \App\Models\Contact::find($singleId);
                             if ($contactModel) {
+                                // Log the ownership check
                                 \Log::info('Checking contact ownership:', [
                                     'contact_id' => $singleId,
                                     'contact_merchant_id' => $contactModel->merchant_id,
                                     'current_merchant_id' => $merchant->id
                                 ]);
-                                if ($contactModel->merchant_id === $merchant->id) {
+                                // Cast to integer for comparison
+                                if ((int)$contactModel->merchant_id === (int)$merchant->id) {
                                     ThriftContributor::firstOrCreate([
                                         'thrift_package_id' => $package->id,
                                         'contact_id' => $singleId,
