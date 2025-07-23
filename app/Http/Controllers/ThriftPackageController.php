@@ -385,7 +385,7 @@ class ThriftPackageController extends Controller
         }
 
         $hasAccess = false;
-        if ($merchant && $package->merchant_id === $merchant->id) {
+        if ($merchant && (int)$package->merchant_id === (int)$merchant->id) {
             $hasAccess = true;
         } elseif ($user && (
             ($package->created_by_type === 'user' && $package->created_by_id === $user->id) ||
