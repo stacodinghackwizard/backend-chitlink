@@ -1159,6 +1159,20 @@ class ThriftPackageController extends Controller
         if (!$amount || $amount < 1) {
             return response()->json(['message' => 'Invalid amount.'], 422);
         }
+        // Restrict merchant to only initiate payment for their own package
+        if ($merchant) {
+            if ($package->merchant_id !== $merchant->id) {
+                return response()->json(['message' => 'Forbidden: You do not own this package.'], 403);
+            }
+        }
+        // Restrict user to only initiate payment for their own or admin package
+        if ($user) {
+            $isOwner = $package->created_by_type === 'user' && $package->created_by_id === $user->id;
+            $isAdmin = $package->userAdmins()->where('users.id', $user->id)->exists();
+            if (!$isOwner && !$isAdmin) {
+                return response()->json(['message' => 'Forbidden: You do not have access to this package.'], 403);
+            }
+        }
         $email = $user ? $user->email : ($merchant ? $merchant->email : null);
         if (!$email) {
             return response()->json(['message' => 'No email found for payment.'], 422);
@@ -1168,8 +1182,6 @@ class ThriftPackageController extends Controller
             'contributor_id' => $user ? $user->id : ($merchant ? $merchant->id : null),
             'contributor_type' => $user ? 'user' : 'merchant',
             'amount' => $amount,
-            'name' => $user ? $user->name : ($merchant ? $merchant->name : null),
-            'email' => $email,
         ];
         $paystackConfig = config('paystack');
         $response = \Http::withHeaders([
@@ -1208,12 +1220,26 @@ class ThriftPackageController extends Controller
         $amount = $result['data']['amount'] / 100; // Convert from kobo
         $contributorType = $meta['contributor_type'] ?? null;
         $contributorId = $meta['contributor_id'] ?? null;
-        // Find wallet
+        // Validate contributor exists
         $wallet = null;
         if ($contributorType === 'user') {
+            $user = \App\Models\User::find($contributorId);
+            if (!$user) {
+                return response()->json(['message' => 'User not found for wallet creation.'], 422);
+            }
             $wallet = \App\Models\Wallet::firstOrCreate(['user_id' => $contributorId], ['balance' => 0]);
         } elseif ($contributorType === 'merchant') {
+            $merchant = \App\Models\Merchant::find($contributorId);
+            if (!$merchant) {
+                return response()->json(['message' => 'Merchant not found for wallet creation.'], 422);
+            }
             $wallet = \App\Models\Wallet::firstOrCreate(['merchant_id' => $contributorId], ['balance' => 0]);
+        } elseif ($contributorType === 'contact') {
+            $contact = \App\Models\Contact::find($contributorId);
+            if (!$contact) {
+                return response()->json(['message' => 'Contact not found for wallet creation.'], 422);
+            }
+            $wallet = \App\Models\Wallet::firstOrCreate(['contact_id' => $contributorId], ['balance' => 0]);
         }
         if (!$wallet) {
             return response()->json(['message' => 'Wallet not found or could not be created.'], 500);
