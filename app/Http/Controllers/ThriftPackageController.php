@@ -1161,19 +1161,23 @@ class ThriftPackageController extends Controller
         }
         // Restrict merchant to only initiate payment for their own package or for their contact contributor
         if ($merchant) {
+            \Log::info('Merchant attempting payment', ['merchant_id' => $merchant->id, 'package_merchant_id' => $package->merchant_id]);
             if ((int)$package->merchant_id !== (int)$merchant->id) {
+                \Log::warning('Forbidden: Merchant does not own this package', ['merchant_id' => $merchant->id, 'package_merchant_id' => $package->merchant_id]);
                 return response()->json(['message' => 'Forbidden: You do not own this package.'], 403);
             }
-            // If contributor_type is contact, check if contact belongs to merchant and is a confirmed contributor for this package
             $meta = $request->input('meta', []);
             if (isset($meta['contributor_type']) && $meta['contributor_type'] === 'contact' && isset($meta['contributor_id'])) {
                 $contactId = $meta['contributor_id'];
+                \Log::info('Merchant payment for contact contributor', ['contact_id' => $contactId]);
                 $contact = \App\Models\Contact::where('id', $contactId)->where('merchant_id', $merchant->id)->first();
                 $isContributor = \App\Models\ThriftContributor::where('thrift_package_id', $package->id)
                     ->where('contact_id', $contactId)
                     ->where('status', 'confirmed')
                     ->exists();
+                \Log::info('Contact and contributor check', ['contact_found' => !!$contact, 'is_contributor' => $isContributor]);
                 if (!$contact || !$isContributor) {
+                    \Log::warning('Forbidden: Contact is not a confirmed contributor', ['contact_id' => $contactId, 'contact_found' => !!$contact, 'is_contributor' => $isContributor]);
                     return response()->json(['message' => 'Forbidden: Contact is not a confirmed contributor for this package.'], 403);
                 }
             }
@@ -1182,7 +1186,9 @@ class ThriftPackageController extends Controller
         if ($user) {
             $isOwner = $package->created_by_type === 'user' && $package->created_by_id === $user->id;
             $isAdmin = $package->userAdmins()->where('users.id', $user->id)->exists();
+            \Log::info('User attempting payment', ['user_id' => $user->id, 'is_owner' => $isOwner, 'is_admin' => $isAdmin]);
             if (!$isOwner && !$isAdmin) {
+                \Log::warning('Forbidden: User does not have access to this package', ['user_id' => $user->id, 'package_id' => $package->id]);
                 return response()->json(['message' => 'Forbidden: You do not have access to this package.'], 403);
             }
         }
