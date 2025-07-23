@@ -383,7 +383,7 @@ class ThriftPackageController extends Controller
             $hasAccess = true;
         } elseif ($user && (
             ($package->created_by_type === 'user' && $package->created_by_id === $user->id) ||
-            $package->admins()->where('users.id', $user->id)->exists()
+            $package->userAdmins()->where('users.id', $user->id)->exists() || $package->merchantAdmins()->where('merchants.id', $merchant->id)->exists()
         )) {
             $hasAccess = true;
         }
@@ -620,7 +620,7 @@ class ThriftPackageController extends Controller
 
         // Only merchant owner or admin can invite
         $isOwner = $merchant && $package->merchant_id === $merchant->id;
-        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        $isAdmin = $user && $package->userAdmins()->where('users.id', $user->id)->exists() || $package->merchantAdmins()->where('merchants.id', $merchant->id)->exists();
         if (!$isOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an admin can invite.'], 403);
         }
@@ -802,7 +802,7 @@ class ThriftPackageController extends Controller
         $application = ThriftPackageApplication::findOrFail($application_id);
         $package = $application->thriftPackage;
         $isOwner = $merchant && $package->merchant_id === $merchant->id;
-        $isAdmin = $user && $package->admins()->where('users.id', $user->id)->exists();
+        $isAdmin = $user && $package->userAdmins()->where('users.id', $user->id)->exists() || $package->merchantAdmins()->where('merchants.id', $merchant->id)->exists();
         if (!$isOwner && !$isAdmin) {
             return response()->json(['message' => 'Forbidden: Only the merchant or an admin can respond.'], 403);
         }
