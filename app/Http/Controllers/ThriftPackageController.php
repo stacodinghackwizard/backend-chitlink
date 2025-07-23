@@ -1022,13 +1022,17 @@ class ThriftPackageController extends Controller
                             }
                         } elseif ($group['type'] === 'contact') {
                             $contactModel = \App\Models\Contact::find($singleId);
-                            if ($contactModel) {
+                            if ($contactModel && $contactModel->merchant_id === $merchant->id) {
                                 ThriftContributor::firstOrCreate([
                                     'thrift_package_id' => $package->id,
                                     'contact_id' => $singleId,
                                 ]);
                             } else {
-                                $invalidContributors[] = ['id' => $singleId, 'type' => 'contact'];
+                                $invalidContributors[] = [
+                                    'id' => $singleId,
+                                    'type' => 'contact',
+                                    'message' => 'Forbidden: This contact does not belong to you.'
+                                ];
                             }
                         }
                     }
