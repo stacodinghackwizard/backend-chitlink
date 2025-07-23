@@ -965,7 +965,7 @@ class ThriftPackageController extends Controller
             $isNew = true;
             // Only add user as admin, never merchant
             if ($user) {
-                $package->admins()->syncWithoutDetaching([$user->id]);
+                $package->userAdmins()->syncWithoutDetaching([$user->id]);
             }
         } else {
             // Update details if present

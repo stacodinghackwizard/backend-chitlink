@@ -33,6 +33,22 @@ class ThriftPackage extends Model
         return $this->hasMany(ThriftContributor::class);
     }
 
+    /**
+     * Get user admins for the thrift package.
+     */
+    public function userAdmins()
+    {
+        return $this->belongsToMany(User::class, 'thrift_admins', 'thrift_package_id', 'user_id');
+    }
+
+    /**
+     * Get merchant admins for the thrift package.
+     */
+    public function merchantAdmins()
+    {
+        return $this->belongsToMany(Merchant::class, 'thrift_admins', 'thrift_package_id', 'merchant_id');
+    }
+
     public function slots()
     {
         return $this->hasMany(ThriftSlot::class);
@@ -41,16 +57,6 @@ class ThriftPackage extends Model
     public function transactions()
     {
         return $this->hasMany(ThriftTransaction::class);
-    }
-
-    public function userAdmins()
-    {
-        return $this->belongsToMany(User::class, 'thrift_admins', 'thrift_package_id', 'user_id');
-    }
-
-    public function merchantAdmins()
-    {
-        return $this->belongsToMany(Merchant::class, 'thrift_admins', 'thrift_package_id', 'merchant_id');
     }
 
     public function invites()
