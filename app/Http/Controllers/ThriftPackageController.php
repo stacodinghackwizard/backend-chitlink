@@ -1304,11 +1304,9 @@ class ThriftPackageController extends Controller
         } elseif ($merchant) {
             $wallet = \App\Models\Wallet::where('merchant_id', $merchant->id)->first();
             if (!$wallet) {
-                // Try contact wallet for merchant
-                $contact = \App\Models\Contact::where('merchant_id', $merchant->id)->first();
-                if ($contact) {
-                    $wallet = \App\Models\Wallet::where('contact_id', $contact->id)->first();
-                }
+                // Try all contact wallets for merchant
+                $contactIds = \App\Models\Contact::where('merchant_id', $merchant->id)->pluck('id');
+                $wallet = \App\Models\Wallet::whereIn('contact_id', $contactIds)->first();
             }
         }
         if (!$wallet) {
@@ -1328,7 +1326,8 @@ class ThriftPackageController extends Controller
     {
         $user = Auth::user();
         $merchant = Auth::guard('merchant')->user();
-        $transaction = \App\Models\WalletTransaction::where('reference', $transactionId)->orWhere('id', $transactionId)->first();
+        $transaction = \App\Models\WalletTransaction::where('reference', $transactionId)
+            ->orWhere('id', $transactionId)->first();
         if (!$transaction) {
             return response()->json(['message' => 'Transaction not found.'], 404);
         }
@@ -1340,8 +1339,8 @@ class ThriftPackageController extends Controller
             if ($wallet->merchant_id === $merchant->id) {
                 $hasAccess = true;
             } else if ($wallet->contact_id) {
-                $contact = \App\Models\Contact::find($wallet->contact_id);
-                if ($contact && $contact->merchant_id === $merchant->id) {
+                $contactIds = \App\Models\Contact::where('merchant_id', $merchant->id)->pluck('id')->toArray();
+                if (in_array($wallet->contact_id, $contactIds)) {
                     $hasAccess = true;
                 }
             }
